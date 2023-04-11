@@ -19,11 +19,8 @@ import * as sunbeam from "sunbeam-types";
 
 process.env.PATH = `${os.homedir()}/go/bin:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
 
-export default function Sunbeam(props: LaunchProps<{ arguments: { command?: string } }>) {
-  const action: sunbeam.Action | undefined = props.arguments?.command
-    ? { type: "push-page", title: "Run", page: { type: "dynamic", command: `sunbeam ${props.arguments.command}` } }
-    : undefined;
-  return <SunbeamPage action={action} />;
+export default function Sunbeam(props: LaunchProps<{ launchContext: { action?: sunbeam.Action } }>) {
+  return <SunbeamPage action={props.launchContext?.action} />;
 }
 
 export function SunbeamPage(props: { action?: sunbeam.Action }) {

@@ -10,16 +10,8 @@
     {
       "name": "sunbeam",
       "title": "Sunbeam",
-      "description": "Show sunbeam Root View",
-      "mode": "view",
-      "arguments": [
-        {
-          "name": "command",
-          "type": "text",
-          "placeholder": "Command",
-          "optional": true
-        }
-      ]
+      "description": "Run Sunbeam Extension from Raycast",
+      "mode": "view"
     }
   ],
   "dependencies": {
