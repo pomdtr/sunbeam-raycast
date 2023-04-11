@@ -17,8 +17,7 @@ import { spawnSync } from "child_process";
 import os from "os";
 import * as sunbeam from "sunbeam-types";
 
-process.env.PATH =
-  "/Users/pomdtr/go/bin:/Users/pomdtr/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+process.env.PATH = `${os.homedir()}/go/bin:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
 
 export default function Sunbeam(props: LaunchProps<{ arguments: { command?: string } }>) {
   const action: sunbeam.Action | undefined = props.arguments?.command
@@ -30,15 +29,21 @@ export default function Sunbeam(props: LaunchProps<{ arguments: { command?: stri
 export function SunbeamPage(props: { action?: sunbeam.Action }) {
   const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", props.action ? ["trigger"] : [], {
     input: props.action ? JSON.stringify(props.action) : "",
+    execute: !props.action?.inputs,
     cwd: os.homedir(),
-    parseOutput: ({ stdout, stderr, exitCode }) => {
-      if (exitCode !== 0) {
-        throw new Error(stderr);
+    parseOutput: (res) => {
+      if (res.exitCode !== 0) {
+        showToast(Toast.Style.Failure, "Error", res.stderr);
+        return undefined;
       }
 
-      return JSON.parse(stdout);
+      return JSON.parse(res.stdout);
     },
   });
+
+  if (props.action?.inputs && props.action.inputs.length > 0) {
+    return <SunbeamForm action={props.action} />;
+  }
 
   if (!page) {
     return <Detail isLoading />;
@@ -66,7 +71,7 @@ function SunbeamList(props: { list: sunbeam.List; reload: () => void }) {
 
 function SunbeamForm(props: { action: sunbeam.Action }) {
   return (
-    <Form actions={<ActionPanel></ActionPanel>}>
+    <Form>
       {props.action.inputs?.map((input) => {
         switch (input.type) {
           case "textfield":
@@ -132,7 +137,14 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
     case "open-path":
       return <Action.Open title={action.title || ""} shortcut={shortcut} target={action.path} />;
     case "push-page":
-      return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
+      return (
+        <Action.Push
+          icon={Icon.ArrowRight}
+          title={action.title || ""}
+          target={<SunbeamPage action={action} />}
+          shortcut={shortcut}
+        />
+      );
     case "run-command": {
       const runAction = async () => {
         const toast = await showToast({ title: "Running", style: Toast.Style.Animated });
@@ -144,6 +156,16 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
         }
         toast.hide();
       };
+      if (action.inputs && action.inputs.length > 0) {
+        return (
+          <Action.Push
+            icon={Icon.Terminal}
+            title={action.title || "Run"}
+            shortcut={shortcut}
+            target={<SunbeamForm action={action} />}
+          />
+        );
+      }
 
       return (
         <Action
