@@ -1,0 +1,45 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "sunbeam",
+  "title": "Sunbeam",
+  "description": "Run Sunbeam Extension from Raycast",
+  "icon": "command-icon.png",
+  "author": "pomdtr",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "sunbeam",
+      "title": "Sunbeam",
+      "description": "Show sunbeam Root View",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "command",
+          "type": "text",
+          "placeholder": "Command",
+          "optional": true
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.48.9",
+    "@raycast/utils": "^1.5.2"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "1.0.5",
+    "@types/node": "18.8.3",
+    "@types/react": "18.0.9",
+    "eslint": "^7.32.0",
+    "prettier": "^2.5.1",
+    "sunbeam-types": "^0.4.3",
+    "typescript": "^4.4.3"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "ray publish"
+  }
+}
