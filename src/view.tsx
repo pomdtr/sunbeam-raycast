@@ -20,6 +20,7 @@ import * as sunbeam from "sunbeam-types";
 process.env.PATH = `${os.homedir()}/go/bin:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
 
 export default function Sunbeam(props: LaunchProps<{ launchContext: { action?: sunbeam.Action } }>) {
+  console.log("launchContext", props.launchContext);
   return <SunbeamPage action={props.launchContext?.action} />;
 }
 

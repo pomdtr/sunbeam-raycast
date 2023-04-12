@@ -8,9 +8,15 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "sunbeam",
+      "name": "view",
       "title": "Sunbeam",
-      "description": "Run Sunbeam Extension from Raycast",
+      "description": "Show Sunbeam root view",
+      "mode": "view"
+    },
+    {
+      "name": "add",
+      "title": "Add Sunbeam Command",
+      "description": "Add a new Sunbeam command to root list",
       "mode": "view"
     }
   ],
