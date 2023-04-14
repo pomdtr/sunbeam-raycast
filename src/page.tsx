@@ -7,7 +7,6 @@ import {
   List,
   closeMainWindow,
   showToast,
-  LaunchProps,
   Toast,
   Icon,
   useNavigation,
@@ -19,14 +18,9 @@ import * as sunbeam from "sunbeam-types";
 
 process.env.PATH = `${os.homedir()}/go/bin:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
 
-export default function Sunbeam(props: LaunchProps<{ launchContext: { action?: sunbeam.Action } }>) {
-  console.log("launchContext", props.launchContext);
-  return <SunbeamPage action={props.launchContext?.action} />;
-}
-
-export function SunbeamPage(props: { action?: sunbeam.Action }) {
-  const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", props.action ? ["trigger"] : [], {
-    input: props.action ? JSON.stringify(props.action) : "",
+export function SunbeamPage(props: { action: sunbeam.Action }) {
+  const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", ["trigger"], {
+    input: JSON.stringify(props.action),
     execute: !props.action?.inputs,
     cwd: os.homedir(),
     parseOutput: (res) => {
@@ -98,10 +92,16 @@ function SunbeamForm(props: { action: sunbeam.Action }) {
   );
 }
 
+function codeblock(text: string, language?: string) {
+  return `\`\`\`${language || ""}
+${text}
+\`\`\``;
+}
+
 function SunbeamDetail(props: { detail: sunbeam.Detail }) {
   let markdown = "";
   if (props.detail.preview?.type === "static") {
-    markdown = props.detail.preview.text;
+    markdown = codeblock(props.detail.preview.text, props.detail.preview.language);
   }
 
   return <Detail markdown={markdown} />;
@@ -147,7 +147,7 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
       const runAction = async () => {
         const toast = await showToast({ title: "Running", style: Toast.Style.Animated });
         spawnSync("sunbeam", ["trigger"], { encoding: "utf-8", input: JSON.stringify(action) });
-        if (action.onSuccess == "reload") {
+        if (action.reloadOnSuccess) {
           reload();
         } else {
           closeMainWindow();
