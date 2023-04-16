@@ -15,6 +15,7 @@ import { spawnSync } from "child_process";
 import { execa } from "execa";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
+import which from "which";
 
 function initEnv() {
   const shell = process.env.SHELL || "/bin/zsh";
@@ -25,9 +26,44 @@ function initEnv() {
   }
 }
 
+function codeblock(text: string, language?: string) {
+  return `\`\`\`${language || ""}
+${text}
+\`\`\``;
+}
+
+async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
+  if (typeof preview === "string") {
+    return preview;
+  }
+
+  if ("text" in preview) {
+    return preview.language == "markdown" ? preview.text : codeblock(preview.text, preview.language);
+  }
+
+  return "command not implemented";
+}
+
 export function Sunbeam(props: { action: sunbeam.Action }) {
   initEnv();
+  if (which.sync("sunbeam", { nothrow: true }) == null) {
+    return <SunbeamNotInstalled />;
+  }
   return <SunbeamPage action={props.action} />;
+}
+
+function SunbeamNotInstalled() {
+  return (
+    <Detail
+      markdown={codeblock("Sunbeam is not installed")}
+      actions={
+        <ActionPanel>
+          <Action.OpenInBrowser title="Open Sunbeam Homepage" url="https://pomdtr.github.io/sunbeam" />
+          <Action.OpenInBrowser title="Open Sunbeam Repository" url="https://github.com/pomdtr/sunbeam" />
+        </ActionPanel>
+      }
+    />
+  );
 }
 
 async function runAction(action: sunbeam.Action): Promise<sunbeam.Page> {
@@ -76,10 +112,11 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
 }
 
 function SunbeamList(props: { list: sunbeam.List; reload: () => void }) {
+  const [selected, setSelected] = useState<string | null>(null);
   return (
-    <List isShowingDetail={props.list.showPreview}>
+    <List isShowingDetail={props.list.showPreview} onSelectionChange={setSelected}>
       {props.list.items?.map((item) => (
-        <SunbeamListItem key={item.id || item.title} item={item} reload={props.reload} />
+        <SunbeamListItem key={item.id || item.title} item={item} selected={item.id == selected} reload={props.reload} />
       ))}
     </List>
   );
@@ -116,30 +153,51 @@ function SunbeamForm(props: { action: sunbeam.Action }) {
   );
 }
 
-function codeblock(text: string, language?: string) {
-  return `\`\`\`${language || ""}
-${text}
-\`\`\``;
-}
-
 function SunbeamDetail(props: { detail: sunbeam.Detail }) {
-  const preview = props.detail.preview;
+  const [markdown, setMarkdown] = useState<string>();
 
-  let markdown = "";
-  if (typeof preview === "string") {
-    markdown = codeblock(preview);
-  } else if ("text" in preview) {
-    markdown = preview.language == "markdown" ? preview.text : codeblock(preview.text, preview.language);
-  }
+  useEffect(() => {
+    refreshPreview(props.detail.preview).then(setMarkdown);
+  }, []);
 
-  return <Detail markdown={markdown} />;
+  return (
+    <Detail
+      markdown={markdown}
+      actions={
+        <ActionPanel>
+          {props.detail.actions?.map((action, idx) => (
+            <SunbeamAction
+              key={idx}
+              action={action}
+              reload={() => {
+                refreshPreview(props.detail.preview).then(setMarkdown);
+              }}
+            />
+          ))}
+        </ActionPanel>
+      }
+    />
+  );
 }
 
-function SunbeamListItem(props: { item: sunbeam.Listitem; reload: () => void }) {
+function SunbeamListItem(props: { item: sunbeam.Listitem; selected: boolean; reload: () => void }) {
+  const [detail, setDetail] = useState<string>();
+
+  useEffect(() => {
+    if (!props.selected) {
+      return;
+    }
+    if (!props.item.preview) {
+      return;
+    }
+    refreshPreview(props.item.preview).then(setDetail);
+  }, []);
+
   return (
     <List.Item
       title={props.item.title}
       subtitle={props.item.subtitle}
+      detail={<List.Item.Detail markdown={detail} />}
       actions={
         <ActionPanel>
           {props.item.actions?.map((action, idx) => (

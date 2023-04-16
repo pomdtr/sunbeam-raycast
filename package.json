@@ -16,12 +16,14 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.48.9",
-    "execa": "^7.1.1"
+    "execa": "^7.1.1",
+    "which": "^3.0.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "1.0.5",
     "@types/node": "18.8.3",
     "@types/react": "18.0.9",
+    "@types/which": "^3.0.0",
     "eslint": "^7.32.0",
     "prettier": "^2.5.1",
     "sunbeam-types": "^0.6.3",
