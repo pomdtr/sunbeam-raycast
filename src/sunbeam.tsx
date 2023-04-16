@@ -11,9 +11,9 @@ import {
   Icon,
   useNavigation,
 } from "@raycast/api";
-import { useExec } from "@raycast/utils";
 import { spawnSync } from "child_process";
-import os from "os";
+import { execa } from "execa";
+import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
 
 function initEnv() {
@@ -30,21 +30,32 @@ export function Sunbeam(props: { action: sunbeam.Action }) {
   return <SunbeamPage action={props.action} />;
 }
 
-function SunbeamPage(props: { action: sunbeam.Action }) {
-  console.debug("action", JSON.stringify(props.action, null, 2));
-  const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", ["trigger"], {
-    input: JSON.stringify(props.action),
-    execute: !props.action?.inputs,
-    cwd: os.homedir(),
-    parseOutput: (res) => {
-      if (res.exitCode !== 0) {
-        showToast(Toast.Style.Failure, "Error", res.stderr);
-        return undefined;
-      }
-
-      return JSON.parse(res.stdout);
-    },
+async function runAction(action: sunbeam.Action): Promise<sunbeam.Page> {
+  const { exitCode, stdout, stderr } = await execa("sunbeam", ["trigger"], {
+    encoding: "utf-8",
+    input: JSON.stringify(action),
   });
+  if (exitCode != 0) {
+    throw new Error(stderr);
+  }
+  return JSON.parse(stdout) as sunbeam.Page;
+}
+
+function SunbeamPage(props: { action: sunbeam.Action }) {
+  const [page, setPage] = useState<sunbeam.Page>();
+
+  const generator = async () => {
+    try {
+      const action = await runAction(props.action);
+      setPage(action);
+    } catch (err) {
+      showToast(Toast.Style.Failure, "Error", (err as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    generator();
+  }, []);
 
   if (props.action?.inputs && props.action.inputs.length > 0) {
     return <SunbeamForm action={props.action} />;
@@ -56,7 +67,7 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
 
   switch (page?.type) {
     case "list":
-      return <SunbeamList list={page} reload={revalidate} />;
+      return <SunbeamList list={page} reload={generator} />;
     case "detail":
       return <SunbeamDetail detail={page} />;
     case "form":
@@ -112,9 +123,13 @@ ${text}
 }
 
 function SunbeamDetail(props: { detail: sunbeam.Detail }) {
+  const preview = props.detail.preview;
+
   let markdown = "";
-  if (props.detail.preview?.type === "static") {
-    markdown = codeblock(props.detail.preview.text, props.detail.preview.language);
+  if (typeof preview === "string") {
+    markdown = codeblock(preview);
+  } else if ("text" in preview) {
+    markdown = preview.language == "markdown" ? preview.text : codeblock(preview.text, preview.language);
   }
 
   return <Detail markdown={markdown} />;
