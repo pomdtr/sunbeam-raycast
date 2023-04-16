@@ -16,9 +16,19 @@ import { spawnSync } from "child_process";
 import os from "os";
 import * as sunbeam from "sunbeam-types";
 
-process.env.PATH = `${os.homedir()}/go/bin:${os.homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+function initEnv() {
+  const shell = process.env.SHELL || "/bin/zsh";
+  const env = spawnSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" }).stdout;
+  for (const line of env.split("\n")) {
+    const [key, value] = line.split("=");
+    process.env[key] = value;
+  }
+}
+
+initEnv();
 
 export function SunbeamPage(props: { action: sunbeam.Action }) {
+  console.debug("action", JSON.stringify(props.action, null, 2));
   const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", ["trigger"], {
     input: JSON.stringify(props.action),
     execute: !props.action?.inputs,
@@ -128,13 +138,15 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
   const navigation = useNavigation();
   const shortcut = action.key ? ({ modifiers: ["cmd"], key: action.key } as Keyboard.Shortcut) : undefined;
   switch (action.type) {
-    case "copy-text":
+    case "copy":
       return <Action.CopyToClipboard title={action.title} shortcut={shortcut} content={action.text} />;
-    case "open-url":
-      return <Action.OpenInBrowser title={action.title} shortcut={shortcut} url={action.url} />;
-    case "open-path":
-      return <Action.Open title={action.title || ""} shortcut={shortcut} target={action.path} />;
-    case "push-page":
+    case "open":
+      return <Action.OpenInBrowser title={action.title} url={action.target} />;
+    case "reload":
+      return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
+    case "exit":
+      return <Action title={action.title || "Exit"} shortcut={shortcut} onAction={closeMainWindow} />;
+    case "push":
       return (
         <Action.Push
           icon={Icon.ArrowRight}
@@ -143,16 +155,20 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
           shortcut={shortcut}
         />
       );
-    case "run-command": {
+    case "run": {
+      if (action.onSuccess == "push") {
+        return (
+          <Action.Push
+            icon={Icon.Terminal}
+            title={action.title || "Run"}
+            shortcut={shortcut}
+            target={<SunbeamPage action={action} />}
+          />
+        );
+      }
+
       const runAction = async () => {
-        const toast = await showToast({ title: "Running", style: Toast.Style.Animated });
         spawnSync("sunbeam", ["trigger"], { encoding: "utf-8", input: JSON.stringify(action) });
-        if (action.reloadOnSuccess) {
-          reload();
-        } else {
-          closeMainWindow();
-        }
-        toast.hide();
       };
       if (action.inputs && action.inputs.length > 0) {
         return (

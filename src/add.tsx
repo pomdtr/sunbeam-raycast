@@ -11,16 +11,14 @@ export default function Sunbeam(props: LaunchProps<{ launchContext: { action?: s
 }
 
 export function AddSunbeamCommand() {
-  const [title, setTitle] = useState("");
+  const [name, setName] = useState("");
   const [command, setCommand] = useState("");
 
   const action: { action: sunbeam.Action } = {
     action: {
-      type: "push-page",
-      page: {
-        type: "dynamic",
-        command,
-      },
+      type: "run",
+      onSuccess: "push",
+      command,
     },
   };
 
@@ -28,10 +26,10 @@ export function AddSunbeamCommand() {
     <Form
       actions={
         <ActionPanel>
-          {title && command ? (
+          {name && command ? (
             <Action.CreateQuicklink
               quicklink={{
-                name: title,
+                name,
                 link: `raycast://extensions/pomdtr/sunbeam/add?context=${encodeURIComponent(JSON.stringify(action))}`,
               }}
             />
@@ -39,8 +37,14 @@ export function AddSunbeamCommand() {
         </ActionPanel>
       }
     >
-      <Form.TextField id="title" title="Title" placeholder="Sunbeam" value={title} onChange={setTitle} />
-      <Form.TextField id="command" title="Command" placeholder="sunbeam" value={command} onChange={setCommand} />
+      <Form.TextField id="name" title="Title" placeholder="Command title" value={name} onChange={setName} />
+      <Form.TextField
+        id="command"
+        title="Command"
+        placeholder="sunbeam run <command>"
+        value={command}
+        onChange={setCommand}
+      />
     </Form>
   );
 }
