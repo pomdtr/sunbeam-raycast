@@ -25,9 +25,12 @@ function initEnv() {
   }
 }
 
-initEnv();
+export function Sunbeam(props: { action: sunbeam.Action }) {
+  initEnv();
+  return <SunbeamPage action={props.action} />;
+}
 
-export function SunbeamPage(props: { action: sunbeam.Action }) {
+function SunbeamPage(props: { action: sunbeam.Action }) {
   console.debug("action", JSON.stringify(props.action, null, 2));
   const { data: page, revalidate } = useExec<sunbeam.Page>("sunbeam", ["trigger"], {
     input: JSON.stringify(props.action),

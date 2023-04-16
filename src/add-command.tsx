@@ -1,13 +1,13 @@
 import { Action, ActionPanel, Form, LaunchProps } from "@raycast/api";
 import { useState } from "react";
 import * as sunbeam from "sunbeam-types";
-import { SunbeamPage } from "./page";
+import { Sunbeam } from "./sunbeam";
 
-export default function Sunbeam(props: LaunchProps<{ launchContext: { action?: sunbeam.Action } }>) {
+export default function AddCommand(props: LaunchProps<{ launchContext: { action?: sunbeam.Action } }>) {
   if (!props.launchContext?.action) {
     return <AddSunbeamCommand />;
   }
-  return <SunbeamPage action={props.launchContext?.action} />;
+  return <Sunbeam action={props.launchContext?.action} />;
 }
 
 export function AddSunbeamCommand() {
@@ -30,7 +30,9 @@ export function AddSunbeamCommand() {
             <Action.CreateQuicklink
               quicklink={{
                 name,
-                link: `raycast://extensions/pomdtr/sunbeam/add?context=${encodeURIComponent(JSON.stringify(action))}`,
+                link: `raycast://extensions/pomdtr/sunbeam/add-command?context=${encodeURIComponent(
+                  JSON.stringify(action)
+                )}`,
               }}
             />
           ) : null}

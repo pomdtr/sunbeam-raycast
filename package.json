@@ -8,7 +8,7 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "add",
+      "name": "add-command",
       "title": "Add Sunbeam Command",
       "description": "Add a new Sunbeam command to root list",
       "mode": "view"
