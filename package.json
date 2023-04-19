@@ -14,6 +14,15 @@
       "mode": "view"
     }
   ],
+  "preferences": [
+    {
+      "name": "shell",
+      "type": "textfield",
+      "required": false,
+      "title": "Shell",
+      "description": "Shell to use for executing commands"
+    }
+  ],
   "dependencies": {
     "@raycast/api": "^1.48.9",
     "execa": "^7.1.1",

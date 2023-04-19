@@ -1,5 +1,6 @@
-import { Keyboard } from "@raycast/api";
 import {
+  Keyboard,
+  getPreferenceValues,
   Action,
   ActionPanel,
   Detail,
@@ -18,7 +19,7 @@ import * as sunbeam from "sunbeam-types";
 import which from "which";
 
 function initEnv() {
-  const shell = process.env.SHELL || "/bin/zsh";
+  const shell = getPreferenceValues().shell || process.env.SHELL || "/bin/zsh";
   const env = spawnSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" }).stdout;
   for (const line of env.split("\n")) {
     const [key, value] = line.split("=");
