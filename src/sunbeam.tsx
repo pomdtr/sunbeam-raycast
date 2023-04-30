@@ -265,48 +265,50 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
   const shortcut = action.key ? ({ modifiers: ["cmd"], key: action.key } as Keyboard.Shortcut) : undefined;
   switch (action.type) {
     case "copy":
-      return <Action.CopyToClipboard title={action.title} shortcut={shortcut} content={action.text} />;
+      return (
+        <Action
+          title={action.title || "Copy"}
+          shortcut={shortcut}
+          onAction={async () =>
+            await execa("sunbeam", {
+              input: JSON.stringify(action),
+            })
+          }
+        />
+      );
     case "open":
-      return <Action.OpenInBrowser title={action.title} url={action.target} />;
+      return (
+        <Action
+          title={action.title || "Open"}
+          shortcut={shortcut}
+          onAction={async () =>
+            await execa("sunbeam", {
+              input: JSON.stringify(action),
+            })
+          }
+        />
+      );
     case "reload":
       return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
     case "exit":
       return <Action title={action.title || "Exit"} shortcut={shortcut} onAction={closeMainWindow} />;
     case "push":
-      return (
-        <Action.Push
-          icon={Icon.ArrowRight}
-          title={action.title || ""}
-          target={<SunbeamPage action={action} />}
-          shortcut={shortcut}
-        />
-      );
+      return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
     case "run": {
       if (action.onSuccess == "push") {
         return (
-          <Action.Push
-            icon={Icon.Terminal}
-            title={action.title || "Run"}
-            shortcut={shortcut}
-            target={<SunbeamPage action={action} />}
-          />
+          <Action.Push title={action.title || "Run"} shortcut={shortcut} target={<SunbeamPage action={action} />} />
         );
       }
 
       if (action.inputs && action.inputs.length > 0) {
         return (
-          <Action.Push
-            icon={Icon.Terminal}
-            title={action.title || "Run"}
-            shortcut={shortcut}
-            target={<SunbeamForm action={action} />}
-          />
+          <Action.Push title={action.title || "Run"} shortcut={shortcut} target={<SunbeamForm action={action} />} />
         );
       }
 
       return (
         <Action
-          icon={Icon.Terminal}
           title={action.title || "Run"}
           shortcut={shortcut}
           onAction={async () => {
