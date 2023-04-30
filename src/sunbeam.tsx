@@ -1,6 +1,5 @@
 import {
   Keyboard,
-  getPreferenceValues,
   Action,
   ActionPanel,
   Detail,
@@ -10,17 +9,19 @@ import {
   showToast,
   Toast,
   Icon,
+  LocalStorage,
   useNavigation,
 } from "@raycast/api";
-import { spawnSync } from "child_process";
-import { execa } from "execa";
+import { execa, execaSync } from "execa";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
 import which from "which";
+import shlex from "shlex";
+import { useCommandHistory } from "./history";
 
 function initEnv() {
-  const shell = getPreferenceValues().shell || process.env.SHELL || "/bin/zsh";
-  const env = spawnSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" }).stdout;
+  const shell = process.env.SHELL || "/bin/zsh";
+  const { stdout: env } = execaSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" });
   for (const line of env.split("\n")) {
     const [key, value] = line.split("=");
     process.env[key] = value;
@@ -38,19 +39,60 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
     return preview;
   }
 
-  if ("text" in preview) {
-    return preview.language == "markdown" ? preview.text : codeblock(preview.text, preview.language);
+  if (preview.text) {
+    return preview.highlight == "markdown" ? preview.text : codeblock(preview.text, preview.highlight);
   }
 
-  return "command not implemented";
+  if (preview.command) {
+    if (typeof preview.command === "string") {
+      const args = shlex.split(preview.command);
+      return execa(args[0], args.slice(1)).then((result) => result.stdout);
+    } else if (Array.isArray(preview.command)) {
+      return execa(preview.command[0], preview.command.slice(1)).then((result) => result.stdout);
+    } else {
+      const args = preview.command.args || [];
+      return execa(args[0], args.slice(1)).then((result) => result.stdout);
+    }
+  }
+
+  return "no preview";
 }
 
-export function Sunbeam(props: { action: sunbeam.Action }) {
+export function Sunbeam(props: { command: string }) {
   initEnv();
+
+  const history = useCommandHistory();
+
+  useEffect(() => {
+    if (history.isLoading) {
+      return;
+    }
+    history.saveCommand(props.command);
+  }, [history.isLoading]);
+
   if (which.sync("sunbeam", { nothrow: true }) == null) {
     return <SunbeamNotInstalled />;
   }
-  return <SunbeamPage action={props.action} />;
+  return <SunbeamPage action={{ type: "run", onSuccess: "push", command: props.command }} />;
+}
+
+export function CommandForm(props: { onSubmit: (command: string) => void; isLoading?: boolean }) {
+  return (
+    <Form
+      isLoading={props.isLoading}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            onSubmit={(values: { command: string }) => {
+              props.onSubmit(values.command);
+            }}
+          />
+        </ActionPanel>
+      }
+    >
+      <Form.TextField id="command" title="Command" placeholder="sunbeam extension browse" />
+    </Form>
+  );
 }
 
 function SunbeamNotInstalled() {
@@ -68,7 +110,7 @@ function SunbeamNotInstalled() {
 }
 
 async function runAction(action: sunbeam.Action): Promise<sunbeam.Page> {
-  const { exitCode, stdout, stderr } = await execa("sunbeam", ["trigger"], {
+  const { exitCode, stdout, stderr } = await execa("sunbeam", {
     encoding: "utf-8",
     input: JSON.stringify(action),
   });
@@ -113,11 +155,17 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
 }
 
 function SunbeamList(props: { list: sunbeam.List; reload: () => void }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>("-1");
   return (
     <List isShowingDetail={props.list.showPreview} onSelectionChange={setSelected}>
-      {props.list.items?.map((item) => (
-        <SunbeamListItem key={item.id || item.title} item={item} selected={item.id == selected} reload={props.reload} />
+      {props.list.items?.map((item, idx) => (
+        <SunbeamListItem
+          key={item.id || idx}
+          id={item.id || idx.toString()}
+          item={item}
+          selected={item.id == selected}
+          reload={props.reload}
+        />
       ))}
     </List>
   );
@@ -181,7 +229,7 @@ function SunbeamDetail(props: { detail: sunbeam.Detail }) {
   );
 }
 
-function SunbeamListItem(props: { item: sunbeam.Listitem; selected: boolean; reload: () => void }) {
+function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; selected: boolean; reload: () => void }) {
   const [detail, setDetail] = useState<string>();
 
   useEffect(() => {
@@ -192,10 +240,11 @@ function SunbeamListItem(props: { item: sunbeam.Listitem; selected: boolean; rel
       return;
     }
     refreshPreview(props.item.preview).then(setDetail);
-  }, []);
+  }, [props.selected]);
 
   return (
     <List.Item
+      id={props.item.id}
       title={props.item.title}
       subtitle={props.item.subtitle}
       detail={<List.Item.Detail markdown={detail} />}
@@ -244,9 +293,6 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
         );
       }
 
-      const runAction = async () => {
-        spawnSync("sunbeam", ["trigger"], { encoding: "utf-8", input: JSON.stringify(action) });
-      };
       if (action.inputs && action.inputs.length > 0) {
         return (
           <Action.Push
@@ -267,7 +313,16 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
             if (action.inputs) {
               navigation.push(<SunbeamForm action={action} />);
             } else {
-              await runAction();
+              const res = await execa("sunbeam", { encoding: "utf-8", input: JSON.stringify(action) });
+              if (res.exitCode != 0) {
+                showToast(Toast.Style.Failure, "Error", res.stderr);
+                return;
+              }
+              if (action.onSuccess == "reload") {
+                reload();
+              } else {
+                closeMainWindow();
+              }
             }
           }}
         />
