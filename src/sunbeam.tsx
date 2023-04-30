@@ -8,8 +8,6 @@ import {
   closeMainWindow,
   showToast,
   Toast,
-  Icon,
-  LocalStorage,
   useNavigation,
 } from "@raycast/api";
 import { execa, execaSync } from "execa";
@@ -50,12 +48,11 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
     } else if (Array.isArray(preview.command)) {
       return execa(preview.command[0], preview.command.slice(1)).then((result) => result.stdout);
     } else {
-      const args = preview.command.args || [];
-      return execa(args[0], args.slice(1)).then((result) => result.stdout);
+      return execa(preview.command.name, preview.command.args).then((result) => result.stdout);
     }
   }
 
-  return "no preview";
+  return "";
 }
 
 export function Sunbeam(props: { command: string }) {
@@ -73,26 +70,7 @@ export function Sunbeam(props: { command: string }) {
   if (which.sync("sunbeam", { nothrow: true }) == null) {
     return <SunbeamNotInstalled />;
   }
-  return <SunbeamPage action={{ type: "run", onSuccess: "push", command: props.command }} />;
-}
-
-export function CommandForm(props: { onSubmit: (command: string) => void; isLoading?: boolean }) {
-  return (
-    <Form
-      isLoading={props.isLoading}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            onSubmit={(values: { command: string }) => {
-              props.onSubmit(values.command);
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TextField id="command" title="Command" placeholder="sunbeam extension browse" />
-    </Form>
-  );
+  return <SunbeamPage action={{ type: "push", command: props.command }} />;
 }
 
 function SunbeamNotInstalled() {
@@ -109,35 +87,40 @@ function SunbeamNotInstalled() {
   );
 }
 
-async function runAction(action: sunbeam.Action): Promise<sunbeam.Page> {
-  const { exitCode, stdout, stderr } = await execa("sunbeam", {
-    encoding: "utf-8",
-    input: JSON.stringify(action),
-  });
+async function runAction(action: sunbeam.Action, inputs?: Record<string, string>): Promise<string> {
+  const { exitCode, stdout, stderr } = await execa(
+    "sunbeam",
+    Object.entries(inputs || {}).map(([k, v]) => `--input=${k}=${v}`),
+    {
+      encoding: "utf-8",
+      input: JSON.stringify(action),
+    }
+  );
   if (exitCode != 0) {
     throw new Error(stderr);
   }
-  return JSON.parse(stdout) as sunbeam.Page;
+  return stdout;
 }
 
 function SunbeamPage(props: { action: sunbeam.Action }) {
   const [page, setPage] = useState<sunbeam.Page>();
-
-  const generator = async () => {
-    try {
-      const action = await runAction(props.action);
-      setPage(action);
-    } catch (err) {
-      showToast(Toast.Style.Failure, "Error", (err as Error).message);
-    }
-  };
+  const [inputs, setInputs] = useState<Record<string, string>>();
 
   useEffect(() => {
-    generator();
-  }, []);
+    if (props.action.inputs && !inputs) {
+      return;
+    }
 
-  if (props.action?.inputs && props.action.inputs.length > 0) {
-    return <SunbeamForm action={props.action} />;
+    runAction(props.action, inputs)
+      .then((result) => JSON.parse(result))
+      .then(setPage)
+      .catch((err) => {
+        showToast(Toast.Style.Failure, "Error", (err as Error).message);
+      });
+  }, [inputs]);
+
+  if (props.action.inputs && !inputs) {
+    return <SunbeamForm inputs={props.action.inputs} onSubmit={(values) => setInputs(values)} />;
   }
 
   if (!page) {
@@ -146,35 +129,61 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
 
   switch (page?.type) {
     case "list":
-      return <SunbeamList list={page} reload={generator} />;
+      return (
+        <SunbeamList
+          list={page}
+          reload={() => {
+            runAction(props.action, inputs)
+              .then((result) => JSON.parse(result))
+              .then(setPage)
+              .catch((err) => {
+                showToast(Toast.Style.Failure, "Error", (err as Error).message);
+              });
+          }}
+        />
+      );
     case "detail":
       return <SunbeamDetail detail={page} />;
-    case "form":
-      return <SunbeamForm action={page.submitAction} />;
   }
 }
 
 function SunbeamList(props: { list: sunbeam.List; reload: () => void }) {
   const [selected, setSelected] = useState<string | null>("-1");
+  const [detail, setDetail] = useState<string>();
+
+  useEffect(() => {
+    if (selected == null) {
+      return;
+    }
+
+    const idx = parseInt(selected);
+    const item = props.list.items?.[idx];
+
+    if (!item?.preview) {
+      return;
+    }
+
+    refreshPreview(item.preview).then((result) => setDetail(result));
+  }, [selected]);
   return (
     <List isShowingDetail={props.list.showPreview} onSelectionChange={setSelected}>
       {props.list.items?.map((item, idx) => (
-        <SunbeamListItem
-          key={item.id || idx}
-          id={item.id || idx.toString()}
-          item={item}
-          selected={item.id == selected}
-          reload={props.reload}
-        />
+        <SunbeamListItem key={idx} id={idx.toString()} item={item} detail={detail} reload={props.reload} />
       ))}
     </List>
   );
 }
 
-function SunbeamForm(props: { action: sunbeam.Action }) {
+function SunbeamForm(props: { inputs: sunbeam.Input[]; onSubmit: (values: Record<string, string>) => void }) {
   return (
-    <Form>
-      {props.action.inputs?.map((input) => {
+    <Form
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm title="Submit" onSubmit={props.onSubmit} />
+        </ActionPanel>
+      }
+    >
+      {props.inputs.map((input) => {
         switch (input.type) {
           case "textfield":
             return (
@@ -229,25 +238,14 @@ function SunbeamDetail(props: { detail: sunbeam.Detail }) {
   );
 }
 
-function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; selected: boolean; reload: () => void }) {
-  const [detail, setDetail] = useState<string>();
-
-  useEffect(() => {
-    if (!props.selected) {
-      return;
-    }
-    if (!props.item.preview) {
-      return;
-    }
-    refreshPreview(props.item.preview).then(setDetail);
-  }, [props.selected]);
-
+function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; detail?: string; reload: () => void }) {
   return (
     <List.Item
-      id={props.item.id}
+      id={props.id}
       title={props.item.title}
       subtitle={props.item.subtitle}
-      detail={<List.Item.Detail markdown={detail} />}
+      accessories={props.item.accessories?.map((accessory) => ({ tag: accessory }))}
+      detail={<List.Item.Detail markdown={props.detail} />}
       actions={
         <ActionPanel>
           {props.item.actions?.map((action, idx) => (
@@ -255,7 +253,6 @@ function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; selected: 
           ))}
         </ActionPanel>
       }
-      accessories={props.item.accessories?.map((accessory) => ({ tag: accessory }))}
     />
   );
 }
@@ -295,36 +292,42 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
     case "run": {
-      if (action.onSuccess == "push") {
-        return (
-          <Action.Push title={action.title || "Run"} shortcut={shortcut} target={<SunbeamPage action={action} />} />
-        );
-      }
-
-      if (action.inputs && action.inputs.length > 0) {
-        return (
-          <Action.Push title={action.title || "Run"} shortcut={shortcut} target={<SunbeamForm action={action} />} />
-        );
-      }
-
       return (
         <Action
           title={action.title || "Run"}
           shortcut={shortcut}
           onAction={async () => {
             if (action.inputs) {
-              navigation.push(<SunbeamForm action={action} />);
-            } else {
-              const res = await execa("sunbeam", { encoding: "utf-8", input: JSON.stringify(action) });
-              if (res.exitCode != 0) {
-                showToast(Toast.Style.Failure, "Error", res.stderr);
-                return;
-              }
-              if (action.onSuccess == "reload") {
+              navigation.push(
+                <SunbeamForm
+                  inputs={action.inputs}
+                  onSubmit={async (inputs) => {
+                    try {
+                      await runAction(action, inputs);
+                      if (action.reloadOnSuccess) {
+                        navigation.pop();
+                        reload();
+                      } else {
+                        closeMainWindow();
+                      }
+                    } catch (err) {
+                      showToast(Toast.Style.Failure, "Error", (err as Error).message);
+                    }
+                  }}
+                />
+              );
+              return;
+            }
+
+            try {
+              await runAction(action);
+              if (action.reloadOnSuccess) {
                 reload();
               } else {
                 closeMainWindow();
               }
+            } catch (err) {
+              showToast(Toast.Style.Failure, "Error", (err as Error).message);
             }
           }}
         />

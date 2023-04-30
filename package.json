@@ -35,7 +35,7 @@
     "@types/which": "^3.0.0",
     "eslint": "^7.32.0",
     "prettier": "^2.5.1",
-    "sunbeam-types": "^0.7.2",
+    "sunbeam-types": "^0.8.0",
     "typescript": "^4.4.3"
   },
   "scripts": {
