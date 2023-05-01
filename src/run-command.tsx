@@ -4,8 +4,8 @@ import { useCommandHistory } from "./history";
 import { useState } from "react";
 
 function deeplink(command: string) {
-  const args = encodeURIComponent(JSON.stringify({ command }));
-  return `raycast://extensions/pomdtr/sunbeam/run-command?arguments=${args}`;
+  const context = encodeURIComponent(JSON.stringify({ command }));
+  return `raycast://extensions/pomdtr/sunbeam/run-command?launchContext=${context}`;
 }
 
 export default function RunCommand(
