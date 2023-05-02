@@ -9,6 +9,8 @@ import {
   showToast,
   Toast,
   useNavigation,
+  Clipboard,
+  open,
 } from "@raycast/api";
 import { execa, execaSync } from "execa";
 import { useEffect, useState } from "react";
@@ -289,34 +291,10 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
   switch (action.type) {
     case "copy":
       return (
-        <Action
-          title={action.title || "Copy"}
-          shortcut={shortcut}
-          onAction={async () => {
-            try {
-              await runAction(action);
-              closeMainWindow();
-            } catch (err) {
-              showToast(Toast.Style.Failure, "Error", (err as Error).message);
-            }
-          }}
-        />
+        <Action title={action.title || "Copy"} shortcut={shortcut} onAction={async () => Clipboard.copy(action.text)} />
       );
     case "open":
-      return (
-        <Action
-          title={action.title || "Open"}
-          shortcut={shortcut}
-          onAction={async () => {
-            try {
-              await runAction(action);
-              closeMainWindow();
-            } catch (err) {
-              showToast(Toast.Style.Failure, "Error", (err as Error).message);
-            }
-          }}
-        />
-      );
+      return <Action title={action.title || "Open"} shortcut={shortcut} onAction={async () => open(action.target)} />;
     case "reload":
       return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
     case "exit":
