@@ -1,4 +1,4 @@
-# Raycast Intregration for Sunbeam
+# Raycast Integration for Sunbeam
 
 ![screenshot](./metadata/sunbeam-1.png)
 
