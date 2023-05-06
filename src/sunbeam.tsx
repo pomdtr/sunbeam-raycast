@@ -11,6 +11,7 @@ import {
   useNavigation,
   Clipboard,
   open,
+  getPreferenceValues,
 } from "@raycast/api";
 import { execa, execaSync } from "execa";
 import { useEffect, useState } from "react";
@@ -20,12 +21,32 @@ import shlex from "shlex";
 import { useCommandHistory } from "./history";
 
 function initEnv() {
-  const shell = process.env.SHELL || "/bin/zsh";
+  const { shell } = getPreferenceValues<{ shell: string }>();
   const { stdout: env } = execaSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" });
   for (const line of env.split("\n")) {
     const [key, value] = line.split("=");
     process.env[key] = value;
   }
+}
+
+async function runAction(action: sunbeam.Action, inputs?: Record<string, string>, query?: string): Promise<string> {
+  const args: string[] = ["trigger"];
+  for (const [key, val] of Object.entries(inputs || {})) {
+    args.push(`--input=${key}=${val}`);
+  }
+
+  if (query) {
+    args.push(`--query=${query}`);
+  }
+
+  const { exitCode, stdout, stderr } = await execa("sunbeam", args, {
+    encoding: "utf-8",
+    input: JSON.stringify(action),
+  });
+  if (exitCode != 0) {
+    throw new Error(stderr);
+  }
+  return stdout;
 }
 
 function codeblock(text: string, language?: string) {
@@ -58,8 +79,6 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
 }
 
 export function Sunbeam(props: { command: string }) {
-  initEnv();
-
   const history = useCommandHistory();
 
   useEffect(() => {
@@ -69,6 +88,7 @@ export function Sunbeam(props: { command: string }) {
     history.saveCommand(props.command);
   }, [history.isLoading]);
 
+  initEnv();
   if (which.sync("sunbeam", { nothrow: true }) == null) {
     return <SunbeamNotInstalled />;
   }
@@ -87,26 +107,6 @@ function SunbeamNotInstalled() {
       }
     />
   );
-}
-
-async function runAction(action: sunbeam.Action, inputs?: Record<string, string>, query?: string): Promise<string> {
-  const args: string[] = [];
-  for (const [key, val] of Object.entries(inputs || {})) {
-    args.push(`--input=${key}=${val}`);
-  }
-
-  if (query) {
-    args.push(`--query=${query}`);
-  }
-
-  const { exitCode, stdout, stderr } = await execa("sunbeam", args, {
-    encoding: "utf-8",
-    input: JSON.stringify(action),
-  });
-  if (exitCode != 0) {
-    throw new Error(stderr);
-  }
-  return stdout;
 }
 
 function SunbeamPage(props: { action: sunbeam.Action }) {

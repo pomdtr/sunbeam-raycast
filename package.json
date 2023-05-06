@@ -22,6 +22,16 @@
       ]
     }
   ],
+  "preferences": [
+    {
+      "name": "shell",
+      "type": "textfield",
+      "title": "Shell",
+      "description": "Shell to extract environment variables from",
+      "required": true,
+      "default": "/bin/zsh"
+    }
+  ],
   "dependencies": {
     "@raycast/api": "^1.50.0",
     "execa": "^7.1.1",
