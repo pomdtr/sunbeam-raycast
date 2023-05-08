@@ -39,9 +39,11 @@ async function runAction(action: sunbeam.Action, inputs?: Record<string, string>
     args.push(`--query=${query}`);
   }
 
+  const input = JSON.stringify(action);
+  console.debug(`sunbeam ${args.join(" ")} << ${input}`);
   const { exitCode, stdout, stderr } = await execa("sunbeam", args, {
     encoding: "utf-8",
-    input: JSON.stringify(action),
+    input,
   });
   if (exitCode != 0) {
     throw new Error(stderr);
