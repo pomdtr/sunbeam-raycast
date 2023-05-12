@@ -57,13 +57,17 @@ ${text}
 \`\`\``;
 }
 
-async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
+async function refreshPreview(preview: sunbeam.TextOrCommand): Promise<string> {
   if (typeof preview === "string") {
     return preview;
   }
 
-  if (preview.text) {
-    return preview.highlight == "markdown" ? preview.text : codeblock(preview.text, preview.highlight);
+  if (typeof preview === "string") {
+    return preview;
+  }
+
+  if ("text" in preview) {
+    return preview.text;
   }
 
   if (preview.command) {
@@ -94,7 +98,16 @@ export function Sunbeam(props: { command: string }) {
   if (which.sync("sunbeam", { nothrow: true }) == null) {
     return <SunbeamNotInstalled />;
   }
-  return <SunbeamPage action={{ type: "push", command: props.command }} />;
+  return (
+    <SunbeamPage
+      action={{
+        type: "push",
+        page: {
+          command: props.command,
+        },
+      }}
+    />
+  );
 }
 
 function SunbeamNotInstalled() {
@@ -131,7 +144,7 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
   }, [inputs, action]);
 
   useEffect(() => {
-    if (page?.type !== "list" || page.onQueryChange) {
+    if (page?.type !== "list" || typeof page.onQueryChange === "undefined") {
       return;
     }
 
@@ -139,7 +152,7 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
       return;
     }
 
-    setAction({ type: "push", command: page.onQueryChange });
+    setAction({ type: "push", page: { command: page.onQueryChange } });
   }, [query]);
 
   if (action.inputs && !inputs) {
@@ -274,7 +287,9 @@ function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; detail?: s
       id={props.id}
       title={props.item.title}
       subtitle={props.item.subtitle}
-      accessories={props.item.accessories?.map((accessory) => ({ tag: accessory }))}
+      accessories={props.item.accessories?.map((accessory) => ({
+        text: accessory,
+      }))}
       detail={<List.Item.Detail markdown={props.detail} />}
       actions={
         <ActionPanel>
