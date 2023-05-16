@@ -206,6 +206,7 @@ function SunbeamList(props: { list: sunbeam.List; reload: () => void; onSearchTe
 
   return (
     <List
+      navigationTitle={props.list.title}
       isShowingDetail={props.list.showPreview}
       onSelectionChange={setSelected}
       onSearchTextChange={props.onSearchTextChange}
@@ -263,6 +264,7 @@ function SunbeamDetail(props: { detail: sunbeam.Detail }) {
 
   return (
     <Detail
+      navigationTitle={props.detail.title}
       markdown={markdown}
       actions={
         <ActionPanel>
@@ -309,6 +311,14 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
     case "copy":
       return (
         <Action title={action.title || "Copy"} shortcut={shortcut} onAction={async () => Clipboard.copy(action.text)} />
+      );
+    case "paste":
+      return (
+        <Action
+          title={action.title || "Paste"}
+          shortcut={shortcut}
+          onAction={async () => Clipboard.paste(action.text)}
+        />
       );
     case "open":
       return <Action title={action.title || "Open"} shortcut={shortcut} onAction={async () => open(action.target)} />;
