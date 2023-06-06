@@ -17,8 +17,8 @@ import { execa, execaSync } from "execa";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
 import which from "which";
-import shlex from "shlex";
 import { useCommandHistory } from "./history";
+import fetch from "cross-fetch";
 
 function initEnv() {
   const { shell } = getPreferenceValues<{ shell: string }>();
@@ -57,7 +57,7 @@ ${text}
 \`\`\``;
 }
 
-async function refreshPreview(preview: sunbeam.TextOrCommand): Promise<string> {
+async function refreshPreview(preview: sunbeam.TextOrCommandOrRequest): Promise<string> {
   if (typeof preview === "string") {
     return preview;
   }
@@ -66,22 +66,24 @@ async function refreshPreview(preview: sunbeam.TextOrCommand): Promise<string> {
     return preview;
   }
 
-  if ("text" in preview) {
-    return preview.text;
+  if (typeof preview === "string") {
+    return preview;
   }
 
-  if (preview.command) {
-    if (typeof preview.command === "string") {
-      const args = shlex.split(preview.command);
-      return execa(args[0], args.slice(1)).then((result) => result.stdout);
-    } else if (Array.isArray(preview.command)) {
-      return execa(preview.command[0], preview.command.slice(1)).then((result) => result.stdout);
-    } else {
-      return execa(preview.command.name, preview.command.args).then((result) => result.stdout);
-    }
+  if (Array.isArray(preview)) {
+    return execa(preview[0], preview.slice(1)).then((result) => result.stdout);
   }
 
-  return "";
+  if ("name" in preview) {
+    return execa(preview.name, preview.args).then((result) => result.stdout);
+  }
+
+  if ("url" in preview) {
+    const res = await fetch(preview.url, { method: preview.method, body: preview.body, headers: preview.headers });
+    return res.text();
+  }
+
+  throw new Error(`Unknown preview type: ${JSON.stringify(preview)}`);
 }
 
 export function Sunbeam(props: { command: string }) {
@@ -98,13 +100,12 @@ export function Sunbeam(props: { command: string }) {
   if (which.sync("sunbeam", { nothrow: true }) == null) {
     return <SunbeamNotInstalled />;
   }
+
   return (
     <SunbeamPage
       action={{
         type: "push",
-        page: {
-          command: props.command,
-        },
+        page: ["bash", "-c", props.command],
       }}
     />
   );
@@ -152,7 +153,7 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
       return;
     }
 
-    setAction({ type: "push", page: { command: page.onQueryChange } });
+    setAction({ type: "push", page: page.onQueryChange });
   }, [query]);
 
   if (action.inputs && !inputs) {
@@ -310,14 +311,24 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
   switch (action.type) {
     case "copy":
       return (
-        <Action title={action.title || "Copy"} shortcut={shortcut} onAction={async () => Clipboard.copy(action.text)} />
+        <Action
+          title={action.title || "Copy"}
+          shortcut={shortcut}
+          onAction={async () => {
+            await Clipboard.copy(action.text);
+            await closeMainWindow();
+          }}
+        />
       );
     case "paste":
       return (
         <Action
           title={action.title || "Paste"}
           shortcut={shortcut}
-          onAction={async () => Clipboard.paste(action.text)}
+          onAction={async () => {
+            await Clipboard.paste(action.text);
+            await closeMainWindow();
+          }}
         />
       );
     case "open":
@@ -328,6 +339,7 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
       return <Action title={action.title || "Exit"} shortcut={shortcut} onAction={closeMainWindow} />;
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
+    case "fetch":
     case "run": {
       return (
         <Action
