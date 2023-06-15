@@ -20,8 +20,9 @@ import which from "which";
 import { useCommandHistory } from "./history";
 import fetch from "cross-fetch";
 
+const { shell } = getPreferenceValues<{ shell: string }>();
+
 function initEnv() {
-  const { shell } = getPreferenceValues<{ shell: string }>();
   const { stdout: env } = execaSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" });
   for (const line of env.split("\n")) {
     const [key, value] = line.split("=");
@@ -57,29 +58,32 @@ ${text}
 \`\`\``;
 }
 
-async function refreshPreview(preview: sunbeam.TextOrCommandOrRequest): Promise<string> {
-  if (typeof preview === "string") {
-    return preview;
+async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
+  if (preview.text) {
+    return preview.text;
   }
 
-  if (typeof preview === "string") {
-    return preview;
+  const command = preview.command;
+  if (command) {
+    if (typeof command === "string") {
+      return execa(command).then((result) => result.stdout);
+    }
+
+    if (Array.isArray(command)) {
+      return execa(command[0], command.slice(1)).then((result) => result.stdout);
+    }
+
+    return execa(command.name, command.args).then((result) => result.stdout);
   }
 
-  if (typeof preview === "string") {
-    return preview;
-  }
+  const request = preview.request;
+  if (request) {
+    if (typeof request === "string") {
+      const res = await fetch(request);
+      return res.text();
+    }
 
-  if (Array.isArray(preview)) {
-    return execa(preview[0], preview.slice(1)).then((result) => result.stdout);
-  }
-
-  if ("name" in preview) {
-    return execa(preview.name, preview.args).then((result) => result.stdout);
-  }
-
-  if ("url" in preview) {
-    const res = await fetch(preview.url, { method: preview.method, body: preview.body, headers: preview.headers });
+    const res = await fetch(request.url, { method: request.method, body: request.body, headers: request.headers });
     return res.text();
   }
 
@@ -104,8 +108,9 @@ export function Sunbeam(props: { command: string }) {
   return (
     <SunbeamPage
       action={{
-        type: "push",
-        page: ["bash", "-c", props.command],
+        type: "run",
+        onSuccess: "push",
+        command: ["bash", "-c", props.command],
       }}
     />
   );
@@ -153,7 +158,7 @@ function SunbeamPage(props: { action: sunbeam.Action }) {
       return;
     }
 
-    setAction({ type: "push", page: page.onQueryChange });
+    setAction({ type: "run", command: page.onQueryChange });
   }, [query]);
 
   if (action.inputs && !inputs) {
@@ -335,8 +340,6 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
       return <Action title={action.title || "Open"} shortcut={shortcut} onAction={async () => open(action.target)} />;
     case "reload":
       return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
-    case "exit":
-      return <Action title={action.title || "Exit"} shortcut={shortcut} onAction={closeMainWindow} />;
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
     case "fetch":
@@ -353,7 +356,7 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
                   onSubmit={async (inputs) => {
                     try {
                       await runAction(action, inputs);
-                      if (action.reloadOnSuccess) {
+                      if (action.onSuccess == "reload") {
                         navigation.pop();
                         reload();
                       } else {
@@ -368,9 +371,14 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
               return;
             }
 
+            if (action.onSuccess == "push") {
+              navigation.push(<SunbeamPage action={action} />);
+              return;
+            }
+
             try {
               await runAction(action);
-              if (action.reloadOnSuccess) {
+              if (action.onSuccess == "reload") {
                 reload();
               } else {
                 closeMainWindow();
