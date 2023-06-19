@@ -108,8 +108,7 @@ export function Sunbeam(props: { command: string }) {
   return (
     <SunbeamPage
       action={{
-        type: "run",
-        onSuccess: "push",
+        type: "push",
         command: ["bash", "-c", props.command],
       }}
     />
@@ -130,7 +129,7 @@ function SunbeamNotInstalled() {
   );
 }
 
-function SunbeamPage(props: { action: sunbeam.Action }) {
+export function SunbeamPage(props: { action: sunbeam.Action }) {
   const [action, setAction] = useState<sunbeam.Action>(props.action);
   const [page, setPage] = useState<sunbeam.Page>();
   const [inputs, setInputs] = useState<Record<string, string>>();
@@ -343,6 +342,7 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
     case "fetch":
+    case "eval":
     case "run": {
       return (
         <Action
@@ -368,11 +368,6 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
                   }}
                 />
               );
-              return;
-            }
-
-            if (action.onSuccess == "push") {
-              navigation.push(<SunbeamPage action={action} />);
               return;
             }
 
