@@ -8,54 +8,18 @@ import {
   closeMainWindow,
   showToast,
   Toast,
-  useNavigation,
   Clipboard,
   open,
-  getPreferenceValues,
 } from "@raycast/api";
-import { execa, execaSync } from "execa";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
-import which from "which";
-import { useCommandHistory } from "./history";
 import fetch from "cross-fetch";
 
-const { shell } = getPreferenceValues<{ shell: string }>();
-
-function initEnv() {
-  const { stdout: env } = execaSync(shell, ["-li", "-c", "env"], { encoding: "utf-8" });
-  for (const line of env.split("\n")) {
-    const [key, value] = line.split("=");
-    process.env[key] = value;
-  }
-}
-
-async function runAction(action: sunbeam.Action, inputs?: Record<string, string>, query?: string): Promise<string> {
-  const args: string[] = ["trigger"];
-  for (const [key, val] of Object.entries(inputs || {})) {
-    args.push(`--input=${key}=${val}`);
-  }
-
-  if (query) {
-    args.push(`--query=${query}`);
-  }
-
-  const input = JSON.stringify(action);
-  console.debug(`sunbeam ${args.join(" ")} << ${input}`);
-  const { exitCode, stdout, stderr } = await execa("sunbeam", args, {
-    encoding: "utf-8",
-    input,
+function fetchVal(expression: string) {
+  return fetch(`https://api.val.town/v1/eval`, {
+    method: "POST",
+    body: JSON.stringify({ code: expression }),
   });
-  if (exitCode != 0) {
-    throw new Error(stderr);
-  }
-  return stdout;
-}
-
-function codeblock(text: string, language?: string) {
-  return `\`\`\`${language || ""}
-${text}
-\`\`\``;
 }
 
 async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
@@ -65,15 +29,7 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
 
   const command = preview.command;
   if (command) {
-    if (typeof command === "string") {
-      return execa(command).then((result) => result.stdout);
-    }
-
-    if (Array.isArray(command)) {
-      return execa(command[0], command.slice(1)).then((result) => result.stdout);
-    }
-
-    return execa(command.name, command.args).then((result) => result.stdout);
+    return "Unsupported";
   }
 
   const request = preview.request;
@@ -87,66 +43,34 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
     return res.text();
   }
 
+  if (preview.expression) {
+    const res = await fetchVal(preview.expression);
+    return res.text();
+  }
+
   throw new Error(`Unknown preview type: ${JSON.stringify(preview)}`);
 }
 
-export function Sunbeam(props: { command: string }) {
-  const history = useCommandHistory();
-
-  useEffect(() => {
-    if (history.isLoading) {
-      return;
-    }
-    history.saveCommand(props.command);
-  }, [history.isLoading]);
-
-  initEnv();
-  if (which.sync("sunbeam", { nothrow: true }) == null) {
-    return <SunbeamNotInstalled />;
-  }
-
-  return (
-    <SunbeamPage
-      action={{
-        type: "push",
-        command: ["bash", "-c", props.command],
-      }}
-    />
-  );
-}
-
-function SunbeamNotInstalled() {
-  return (
-    <Detail
-      markdown={codeblock("Sunbeam is not installed")}
-      actions={
-        <ActionPanel>
-          <Action.OpenInBrowser title="Open Sunbeam Homepage" url="https://pomdtr.github.io/sunbeam" />
-          <Action.OpenInBrowser title="Open Sunbeam Repository" url="https://github.com/pomdtr/sunbeam" />
-        </ActionPanel>
-      }
-    />
-  );
-}
-
 export function SunbeamPage(props: { action: sunbeam.Action }) {
-  const [action, setAction] = useState<sunbeam.Action>(props.action);
   const [page, setPage] = useState<sunbeam.Page>();
   const [inputs, setInputs] = useState<Record<string, string>>();
   const [query, setQuery] = useState<string>();
+  console.log("SunbeamPage", page);
+
+  const action = props.action;
+
+  if (action.type !== "eval") {
+    return <Detail markdown={"Unsupported action type: " + props.action.type} />;
+  }
 
   useEffect(() => {
-    if (action.inputs && !inputs) {
-      return;
-    }
-
-    runAction(action, inputs)
-      .then((result) => JSON.parse(result))
+    fetchVal(action.expression)
+      .then((res) => res.json())
       .then(setPage)
       .catch((err) => {
         showToast(Toast.Style.Failure, "Error", (err as Error).message);
       });
-  }, [inputs, action]);
+  }, []);
 
   useEffect(() => {
     if (page?.type !== "list" || typeof page.onQueryChange === "undefined") {
@@ -156,11 +80,9 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
     if (!query) {
       return;
     }
-
-    setAction({ type: "run", command: page.onQueryChange });
   }, [query]);
 
-  if (action.inputs && !inputs) {
+  if (action.inputs && action.inputs.length > 0 && !inputs) {
     return <SunbeamForm inputs={action.inputs} onSubmit={(values) => setInputs(values)} />;
   }
 
@@ -174,8 +96,8 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
         <SunbeamList
           list={page}
           reload={() => {
-            runAction(action, inputs)
-              .then((result) => JSON.parse(result))
+            fetchVal(action.expression)
+              .then((res) => res.json())
               .then(setPage)
               .catch((err) => {
                 showToast(Toast.Style.Failure, "Error", (err as Error).message);
@@ -184,6 +106,8 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
           onSearchTextChange={page.onQueryChange ? setQuery : undefined}
         />
       );
+    case "form":
+      return <SunbeamForm inputs={page.submitAction.inputs || []} onSubmit={(values) => console.log(values)} />;
 
     case "detail":
       return <SunbeamDetail detail={page} />;
@@ -310,7 +234,6 @@ function SunbeamListItem(props: { id: string; item: sunbeam.Listitem; detail?: s
 }
 
 function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () => void }): JSX.Element {
-  const navigation = useNavigation();
   const shortcut = action.key ? ({ modifiers: ["cmd"], key: action.key } as Keyboard.Shortcut) : undefined;
   switch (action.type) {
     case "copy":
@@ -342,48 +265,32 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
     case "fetch":
+    case "run":
+      return <Action title={"Unsupported Action"} />;
     case "eval":
-    case "run": {
       return (
         <Action
-          title={action.title || "Run"}
+          title={action.title || "Eval"}
           shortcut={shortcut}
           onAction={async () => {
-            if (action.inputs) {
-              navigation.push(
-                <SunbeamForm
-                  inputs={action.inputs}
-                  onSubmit={async (inputs) => {
-                    try {
-                      await runAction(action, inputs);
-                      if (action.onSuccess == "reload") {
-                        navigation.pop();
-                        reload();
-                      } else {
-                        closeMainWindow();
-                      }
-                    } catch (err) {
-                      showToast(Toast.Style.Failure, "Error", (err as Error).message);
-                    }
-                  }}
-                />
-              );
-              return;
-            }
-
-            try {
-              await runAction(action);
-              if (action.onSuccess == "reload") {
+            const res = await fetchVal(action.expression);
+            const text = await res.text();
+            switch (action.onSuccess) {
+              case "copy":
+                await Clipboard.copy(text);
+                break;
+              case "paste":
+                await Clipboard.paste(text);
+                break;
+              case "reload":
                 reload();
-              } else {
-                closeMainWindow();
-              }
-            } catch (err) {
-              showToast(Toast.Style.Failure, "Error", (err as Error).message);
+                break;
+              case "open":
+                open(text);
+                break;
             }
           }}
         />
       );
-    }
   }
 }
