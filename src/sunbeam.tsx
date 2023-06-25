@@ -10,15 +10,21 @@ import {
   Toast,
   Clipboard,
   open,
+  getPreferenceValues,
 } from "@raycast/api";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
 import fetch from "cross-fetch";
 
+const { valTownToken } = getPreferenceValues<Preferences.EvalExpression>();
+
 function fetchVal(expression: string) {
   return fetch(`https://api.val.town/v1/eval`, {
     method: "POST",
     body: JSON.stringify({ code: expression }),
+    headers: {
+      Authorization: `Bearer ${valTownToken}`,
+    },
   });
 }
 
@@ -55,21 +61,30 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
   const [page, setPage] = useState<sunbeam.Page>();
   const [inputs, setInputs] = useState<Record<string, string>>();
   const [query, setQuery] = useState<string>();
-  console.log("SunbeamPage", page);
 
   const action = props.action;
 
-  if (action.type !== "eval") {
+  if (action.type !== "eval" && action.type !== "fetch") {
     return <Detail markdown={"Unsupported action type: " + props.action.type} />;
   }
 
   useEffect(() => {
-    fetchVal(action.expression)
-      .then((res) => res.json())
-      .then(setPage)
-      .catch((err) => {
-        showToast(Toast.Style.Failure, "Error", (err as Error).message);
-      });
+    if (action.type === "eval") {
+      fetchVal(action.expression)
+        .then((res) => res.json())
+        .then(setPage)
+        .catch((err) => {
+          showToast(Toast.Style.Failure, "Error", (err as Error).message);
+        });
+    } else if (action.type === "fetch") {
+      const input = typeof action.request === "string" ? action.request : action.request.url;
+      fetch(input)
+        .then((res) => res.json())
+        .then(setPage)
+        .catch((err) => {
+          showToast(Toast.Style.Failure, "Error", (err as Error).message);
+        });
+    }
   }, []);
 
   useEffect(() => {
@@ -96,18 +111,27 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
         <SunbeamList
           list={page}
           reload={() => {
-            fetchVal(action.expression)
-              .then((res) => res.json())
-              .then(setPage)
-              .catch((err) => {
-                showToast(Toast.Style.Failure, "Error", (err as Error).message);
-              });
+            if (action.type === "eval") {
+              fetchVal(action.expression)
+                .then((res) => res.json())
+                .then(setPage)
+                .catch((err) => {
+                  showToast(Toast.Style.Failure, "Error", (err as Error).message);
+                });
+            }
           }}
           onSearchTextChange={page.onQueryChange ? setQuery : undefined}
         />
       );
     case "form":
-      return <SunbeamForm inputs={page.submitAction.inputs || []} onSubmit={(values) => console.log(values)} />;
+      return (
+        <SunbeamForm
+          inputs={page.submitAction.inputs || []}
+          onSubmit={(values) => {
+            console.log(values);
+          }}
+        />
+      );
 
     case "detail":
       return <SunbeamDetail detail={page} />;

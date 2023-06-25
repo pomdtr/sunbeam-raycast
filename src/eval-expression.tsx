@@ -2,9 +2,9 @@ import { ActionPanel, Action, Form, useNavigation, Icon } from "@raycast/api";
 import { SunbeamPage } from "./sunbeam";
 import { useState } from "react";
 
-function deeplink(command: string) {
-  const context = encodeURIComponent(JSON.stringify({ command }));
-  return `raycast://extensions/pomdtr/sunbeam/run-command?launchContext=${context}`;
+function deeplink(expression: string) {
+  const context = encodeURIComponent(JSON.stringify({ expression }));
+  return `raycast://extensions/pomdtr/sunbeam/eval-expression?launchContext=${context}`;
 }
 
 export default function (props: { arguments: Arguments.EvalExpression; launchContext: { expression?: string } }) {
@@ -16,7 +16,7 @@ export default function (props: { arguments: Arguments.EvalExpression; launchCon
       <SunbeamPage
         action={{
           type: "eval",
-          expression: props.arguments.expression,
+          expression: props.launchContext.expression,
         }}
       />
     );
