@@ -12,6 +12,20 @@
       "name": "search-commands",
       "description": "Search Sunbeam Commands",
       "mode": "view"
+    },
+    {
+      "title": "Run Command",
+      "name": "run-command",
+      "description": "Run Sunbeam Command",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "command",
+          "type": "text",
+          "placeholder": "Command",
+          "required": true
+        }
+      ]
     }
   ],
   "preferences": [

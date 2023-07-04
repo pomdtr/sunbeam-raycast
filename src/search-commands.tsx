@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
-import { Action, ActionPanel, List } from "@raycast/api";
+import { Action, ActionPanel, Icon, List } from "@raycast/api";
 import { SunbeamPage } from "./sunbeam";
 
 type Manifest = {
@@ -20,6 +20,11 @@ type Manifest = {
   };
 };
 
+function deeplink(command: string): string {
+  const args = encodeURIComponent(JSON.stringify({ command }));
+  return `raycast://extensions/pomdtr/sunbeam/run-command?arguments=${args}`;
+}
+
 export default function SearchCommands() {
   const [manifest, setManifest] = useState<Manifest>();
   useEffect(() => {
@@ -31,17 +36,25 @@ export default function SearchCommands() {
   return (
     <List navigationTitle="Search Commands" isLoading={!manifest} searchBarPlaceholder="Search Commands...">
       {manifest?.commands &&
-        Object.entries(manifest.commands).map(([key, command]) => (
+        Object.entries(manifest.commands).map(([name, command]) => (
           <List.Item
-            key={key}
+            key={name}
             title={command.title}
             subtitle={command.description}
-            accessories={[{ text: key }]}
+            accessories={[{ text: name }]}
             actions={
               <ActionPanel>
                 <Action.Push
+                  icon={Icon.Terminal}
                   title="Run Command"
-                  target={<SunbeamPage action={{ type: "push", command: [join(command.dir, command.entryPoint)] }} />}
+                  target={<SunbeamPage action={{ type: "push", command: ["sunbeam", name] }} />}
+                />
+                <Action.CreateQuicklink
+                  title="Create Quicklink"
+                  quicklink={{
+                    name: command.title,
+                    link: deeplink(name),
+                  }}
                 />
               </ActionPanel>
             }

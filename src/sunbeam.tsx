@@ -19,7 +19,7 @@ const { shell } = getPreferenceValues<ExtensionPreferences>();
 async function triggerAction(action: sunbeam.Action) {
   const input = JSON.stringify(action);
 
-  const { stdout, exitCode, stderr } = await execa(shell, ["-lic", "sunbeam trigger"], {
+  const { stdout, exitCode, stderr } = await execa(shell, ["-lc", "sunbeam trigger"], {
     input,
   });
 
