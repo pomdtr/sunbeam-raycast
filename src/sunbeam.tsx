@@ -30,24 +30,30 @@ async function triggerAction(action: sunbeam.Action) {
   return stdout;
 }
 
-async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
-  if (preview.text) {
-    return preview.text;
+async function refreshPreview(detail: {
+  command?: sunbeam.Command;
+  request?: sunbeam.Request;
+  text?: string;
+  file?: string;
+  expression?: sunbeam.Expression;
+}): Promise<string> {
+  if (detail.text) {
+    return detail.text;
   }
 
-  let previewAction: sunbeam.Action;
-  if (preview.command) {
-    previewAction = { type: "run", command: preview.command };
-  } else if (preview.request) {
-    previewAction = { type: "fetch", request: preview.request };
-  } else if (preview.expression) {
-    previewAction = { type: "eval", expression: preview.expression };
+  let detailAction: sunbeam.Action;
+  if (detail.command) {
+    detailAction = { type: "run", command: detail.command };
+  } else if (detail.request) {
+    detailAction = { type: "fetch", request: detail.request };
+  } else if (detail.expression) {
+    detailAction = { type: "eval", expression: detail.expression };
   } else {
-    throw new Error(`Unknown preview type: ${JSON.stringify(preview)}`);
+    throw new Error(`Unknown detail type: ${JSON.stringify(detail)}`);
   }
 
-  console.debug("Refreshing preview", previewAction);
-  return await triggerAction(previewAction);
+  console.debug("Refreshing preview", detailAction);
+  return await triggerAction(detailAction);
 }
 
 export function SunbeamPage(props: { action: sunbeam.Action }) {
@@ -111,17 +117,17 @@ function SunbeamList(props: { list: sunbeam.List; reload: () => void; onSearchTe
     const idx = parseInt(selected);
     const item = props.list.items?.[idx];
 
-    if (!item?.preview) {
+    if (!item?.detail) {
       return;
     }
 
-    refreshPreview(item.preview).then((result) => setDetail(result));
+    refreshPreview(item?.detail).then((result) => setDetail(result));
   }, [selected]);
 
   return (
     <List
       navigationTitle={props.list.title}
-      isShowingDetail={props.list.showPreview}
+      isShowingDetail={props.list.showDetail}
       onSelectionChange={setSelected}
       onSearchTextChange={props.onSearchTextChange}
     >
@@ -173,7 +179,7 @@ function SunbeamDetail(props: { detail: sunbeam.Detail }) {
   const [markdown, setMarkdown] = useState<string>();
 
   useEffect(() => {
-    refreshPreview(props.detail.preview).then(setMarkdown);
+    refreshPreview(props.detail).then(setMarkdown);
   }, []);
 
   return (
@@ -187,7 +193,7 @@ function SunbeamDetail(props: { detail: sunbeam.Detail }) {
               key={idx}
               action={action}
               reload={() => {
-                refreshPreview(props.detail.preview).then(setMarkdown);
+                refreshPreview(props.detail).then(setMarkdown);
               }}
             />
           ))}
