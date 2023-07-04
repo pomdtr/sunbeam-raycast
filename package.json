@@ -8,46 +8,27 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "fetch-page",
-      "title": "Fetch Page",
-      "description": "Fetch Page from url",
-      "mode": "view",
-      "arguments": [
-        {
-          "name": "url",
-          "type": "text",
-          "placeholder": "url",
-          "required": false
-        }
-      ]
-    },
+      "title": "Search Commands",
+      "name": "search-commands",
+      "description": "Search Sunbeam Commands",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
     {
-      "name": "eval-expression",
-      "title": "Eval Expression",
-      "description": "Eval Expression in val.town",
-      "mode": "view",
-      "preferences": [
-        {
-          "name": "valTownToken",
-          "title": "Val Town Token",
-          "description": "Token for val.town",
-          "type": "password",
-          "required": true
-        }
-      ],
-      "arguments": [
-        {
-          "name": "expression",
-          "type": "text",
-          "placeholder": "expression",
-          "required": false
-        }
-      ]
+      "name": "shell",
+      "title": "Shell",
+      "description": "The shell to use when executing commands.",
+      "default": "/bin/zsh",
+      "type": "textfield",
+      "key": "shell",
+      "required": true
     }
   ],
   "dependencies": {
     "@raycast/api": "^1.50.0",
-    "cross-fetch": "^3.1.6"
+    "cross-fetch": "^3.1.6",
+    "execa": "^7.1.1"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.5",

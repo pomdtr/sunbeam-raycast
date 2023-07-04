@@ -6,26 +6,28 @@ import {
   Form,
   List,
   closeMainWindow,
-  showToast,
-  Toast,
   Clipboard,
   open,
   getPreferenceValues,
 } from "@raycast/api";
 import { useEffect, useState } from "react";
 import * as sunbeam from "sunbeam-types";
-import fetch from "cross-fetch";
+import { execa } from "execa";
 
-const { valTownToken } = getPreferenceValues<Preferences.EvalExpression>();
+const { shell } = getPreferenceValues<ExtensionPreferences>();
 
-function fetchVal(expression: string) {
-  return fetch(`https://api.val.town/v1/eval`, {
-    method: "POST",
-    body: JSON.stringify({ code: expression }),
-    headers: {
-      Authorization: `Bearer ${valTownToken}`,
-    },
+async function triggerAction(action: sunbeam.Action) {
+  const input = JSON.stringify(action);
+
+  const { stdout, exitCode, stderr } = await execa(shell, ["-lic", "sunbeam trigger"], {
+    input,
   });
+
+  if (exitCode !== 0) {
+    throw new Error(`Failed to trigger action: ${stderr}`);
+  }
+
+  return stdout;
 }
 
 async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
@@ -33,69 +35,33 @@ async function refreshPreview(preview: sunbeam.Preview): Promise<string> {
     return preview.text;
   }
 
-  const command = preview.command;
-  if (command) {
-    return "Unsupported";
+  let previewAction: sunbeam.Action;
+  if (preview.command) {
+    previewAction = { type: "run", command: preview.command };
+  } else if (preview.request) {
+    previewAction = { type: "fetch", request: preview.request };
+  } else if (preview.expression) {
+    previewAction = { type: "eval", expression: preview.expression };
+  } else {
+    throw new Error(`Unknown preview type: ${JSON.stringify(preview)}`);
   }
 
-  const request = preview.request;
-  if (request) {
-    if (typeof request === "string") {
-      const res = await fetch(request);
-      return res.text();
-    }
-
-    const res = await fetch(request.url, { method: request.method, body: request.body, headers: request.headers });
-    return res.text();
-  }
-
-  if (preview.expression) {
-    const res = await fetchVal(preview.expression);
-    return res.text();
-  }
-
-  throw new Error(`Unknown preview type: ${JSON.stringify(preview)}`);
+  console.debug("Refreshing preview", previewAction);
+  return await triggerAction(previewAction);
 }
 
 export function SunbeamPage(props: { action: sunbeam.Action }) {
   const [page, setPage] = useState<sunbeam.Page>();
   const [inputs, setInputs] = useState<Record<string, string>>();
-  const [query, setQuery] = useState<string>();
 
   const action = props.action;
 
-  if (action.type !== "eval" && action.type !== "fetch") {
-    return <Detail markdown={"Unsupported action type: " + props.action.type} />;
-  }
-
   useEffect(() => {
-    if (action.type === "eval") {
-      fetchVal(action.expression)
-        .then((res) => res.json())
-        .then(setPage)
-        .catch((err) => {
-          showToast(Toast.Style.Failure, "Error", (err as Error).message);
-        });
-    } else if (action.type === "fetch") {
-      const input = typeof action.request === "string" ? action.request : action.request.url;
-      fetch(input)
-        .then((res) => res.json())
-        .then(setPage)
-        .catch((err) => {
-          showToast(Toast.Style.Failure, "Error", (err as Error).message);
-        });
-    }
+    triggerAction(action)
+      .then((result) => JSON.parse(result))
+      .then((result) => setPage(result))
+      .catch(console.error);
   }, []);
-
-  useEffect(() => {
-    if (page?.type !== "list" || typeof page.onQueryChange === "undefined") {
-      return;
-    }
-
-    if (!query) {
-      return;
-    }
-  }, [query]);
 
   if (action.inputs && action.inputs.length > 0 && !inputs) {
     return <SunbeamForm inputs={action.inputs} onSubmit={(values) => setInputs(values)} />;
@@ -111,16 +77,11 @@ export function SunbeamPage(props: { action: sunbeam.Action }) {
         <SunbeamList
           list={page}
           reload={() => {
-            if (action.type === "eval") {
-              fetchVal(action.expression)
-                .then((res) => res.json())
-                .then(setPage)
-                .catch((err) => {
-                  showToast(Toast.Style.Failure, "Error", (err as Error).message);
-                });
-            }
+            triggerAction(action)
+              .then((result) => JSON.parse(result))
+              .then((result) => setPage(result))
+              .catch(console.error);
           }}
-          onSearchTextChange={page.onQueryChange ? setQuery : undefined}
         />
       );
     case "form":
@@ -288,31 +249,16 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
       return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
-    case "fetch":
     case "run":
-      return <Action title={"Unsupported Action"} />;
+    case "fetch":
     case "eval":
       return (
         <Action
           title={action.title || "Eval"}
           shortcut={shortcut}
           onAction={async () => {
-            const res = await fetchVal(action.expression);
-            const text = await res.text();
-            switch (action.onSuccess) {
-              case "copy":
-                await Clipboard.copy(text);
-                break;
-              case "paste":
-                await Clipboard.paste(text);
-                break;
-              case "reload":
-                reload();
-                break;
-              case "open":
-                open(text);
-                break;
-            }
+            const output = await triggerAction(action);
+            console.log(output);
           }}
         />
       );
