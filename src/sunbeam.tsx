@@ -43,7 +43,7 @@ async function refreshPreview(detail: {
 
   let detailAction: sunbeam.Action;
   if (detail.command) {
-    detailAction = { type: "run", command: detail.command };
+    detailAction = { type: "exec", command: detail.command };
   } else if (detail.request) {
     detailAction = { type: "fetch", request: detail.request };
   } else if (detail.expression) {
@@ -255,7 +255,7 @@ function SunbeamAction({ action, reload }: { action: sunbeam.Action; reload: () 
       return <Action title={action.title || "Reload"} shortcut={shortcut} onAction={reload} />;
     case "push":
       return <Action.Push title={action.title || ""} target={<SunbeamPage action={action} />} shortcut={shortcut} />;
-    case "run":
+    case "exec":
     case "fetch":
     case "eval":
       return (

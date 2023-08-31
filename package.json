@@ -8,21 +8,21 @@
   "license": "MIT",
   "commands": [
     {
-      "title": "Search Commands",
-      "name": "search-commands",
-      "description": "Search Sunbeam Commands",
+      "name": "add-command",
+      "title": "Add Command",
+      "description": "Add Sunbeam Command to Raycast Root List",
       "mode": "view"
     },
     {
-      "title": "Run Command",
       "name": "run-command",
+      "title": "Run Command",
       "description": "Run Sunbeam Command",
       "mode": "view",
       "arguments": [
         {
           "name": "command",
           "type": "text",
-          "placeholder": "Command",
+          "placeholder": "command",
           "required": true
         }
       ]
