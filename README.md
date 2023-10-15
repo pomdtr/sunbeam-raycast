@@ -1,13 +1,16 @@
 # Raycast Integration for Sunbeam
 
-Wire Raycast UI to the Sunbeam Extension API.\
-Extends raycast with any language, and share your extensions with windows and linux users.
-
-## Requirements
-
-- [sunbeam](https://github.com/pomdtr/sunbeam)
-
-## Screenshots
+Use raycast as a [sunbeam](https://pomdtr.github.io/sunbeam) client.
 
 ![screenshot](./metadata/sunbeam-1.png)
-![screenshot](./metadata/sunbeam-2.png)
+
+## Installation
+
+Make sure that node and sunbeam are installed.
+
+Clone this repository, then run the following commands:
+
+```sh
+npm install # Install dependencies
+npm run dev # Install extension
+```
