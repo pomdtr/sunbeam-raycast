@@ -6,11 +6,12 @@ import {
   List,
   useNavigation,
   LaunchProps,
-  Form,
   Icon,
   Clipboard,
   open,
   closeMainWindow,
+  showToast,
+  Toast,
 } from "@raycast/api";
 import * as sunbeam from "sunbeam-types";
 import { useEffect, useState } from "react";
@@ -95,6 +96,9 @@ function SunbeamRoot() {
   useEffect(() => {
     loadExtension().then((extensions) => {
       setState({ extensions, isLoading: false })
+    }).catch((err) => {
+      showToast(Toast.Style.Failure, "Failed to load extensions", err);
+      setState({ extensions: [], isLoading: false })
     })
   }, [])
 
@@ -117,6 +121,9 @@ function SunbeamExtension(props: { alias: string }) {
   useEffect(() => {
     Extension.load(props.alias).then((extension) => {
       setState({ extension, isLoading: false });
+    }).catch((err) => {
+      showToast(Toast.Style.Failure, "Failed to load extension", err);
+      setState({ isLoading: false });
     })
   }, []);
 
@@ -134,6 +141,7 @@ function SunbeamCommand({ extension, command }: { extension: Extension; command:
     key={command.name}
     title={command.title}
     subtitle={extension.manifest.title}
+    accessories={[{ text: extension.alias }]}
     actions={<ActionPanel>
       <SunbeamAction action={{
         title: "Run Command",
@@ -155,6 +163,9 @@ function SunbeamPage(props: { extension: Extension, commandName: string; params:
   useEffect(() => {
     props.extension.run(props.commandName, { params: props.params }).then((page) => {
       setState({ page, isLoading: false });
+    }).catch((err) => {
+      showToast(Toast.Style.Failure, "Failed to load page", err);
+      setState({ isLoading: false });
     })
   }, []);
 
@@ -167,8 +178,6 @@ function SunbeamPage(props: { extension: Extension, commandName: string; params:
       return <SunbeamList extension={props.extension} list={state.page} />;
     case "detail":
       return <SunbeamDetail extension={props.extension} detail={state.page} />;
-    case "form":
-      return <SunbeamForm extension={props.extension} form={state.page} />;
   }
 }
 
@@ -219,39 +228,6 @@ function SunbeamDetail(props: { extension: Extension; detail: sunbeam.Detail }) 
         </ActionPanel>
       }
     />
-  );
-}
-
-function SunbeamForm(props: { extension: Extension; form: sunbeam.Form }): JSX.Element {
-  return (
-    <Form
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title={"Submit"}
-          />
-        </ActionPanel>
-      }
-    >
-      {props.form.fields?.map((field) => {
-        switch (field.input.type) {
-          case "checkbox":
-            return <Form.Checkbox key={field.name} id={field.name} title={field.title} label={field.input.label} />;
-          case "select":
-            return (
-              <Form.Dropdown key={field.name} id={field.name} title={field.title}>
-                {field.input.options.map((option, idx) => (
-                  <Form.Dropdown.Item key={idx} title={option.title} value={option.value} />
-                ))}
-              </Form.Dropdown>
-            );
-          case "text":
-            return <Form.TextField key={field.name} id={field.name} title={field.title} />;
-          case "textarea":
-            return <Form.TextArea key={field.name} id={field.name} title={field.title} />;
-        }
-      })}
-    </Form>
   );
 }
 
