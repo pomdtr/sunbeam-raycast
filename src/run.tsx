@@ -161,7 +161,7 @@ async function runAction(onAction: sunbeam.Command, extension: Extension, push: 
       }
       return;
     case "open":
-      open(onAction.target);
+      open(onAction.target, onAction.app?.mac)
       if (onAction.exit) {
         await closeMainWindow();
       }
