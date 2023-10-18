@@ -143,6 +143,7 @@ function SunbeamCommand({ extension, command }: { extension: Extension; command:
   return <List.Item
     key={command.name}
     title={command.title}
+    keywords={[extension.manifest.title, extension.alias]}
     subtitle={extension.manifest.title}
     accessories={[{ text: extension.alias }]}
     actions={<ActionPanel>
