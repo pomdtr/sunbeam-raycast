@@ -36,7 +36,7 @@
     "@raycast/api": "^1.58.0",
     "@raycast/utils": "^1.9.1",
     "execa": "^7.1.1",
-    "sunbeam-types": "^0.22.10"
+    "sunbeam-types": "^0.22.13"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.5",

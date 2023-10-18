@@ -4,14 +4,13 @@ import {
   Detail,
   getPreferenceValues,
   List,
-  useNavigation,
   LaunchProps,
-  Icon,
-  Clipboard,
-  open,
-  closeMainWindow,
   showToast,
   Toast,
+  useNavigation,
+  Clipboard,
+  closeMainWindow,
+  open,
 } from "@raycast/api";
 import * as sunbeam from "sunbeam-types";
 import { useEffect, useState } from "react";
@@ -50,9 +49,12 @@ class Extension {
     return new Extension(alias, manifest);
   }
 
-  async run(commandName: string, input: { params: Record<string, string | number | boolean> }) {
+  async run(commandName: string, input: { params: Record<string, string | number | boolean>, query?: string }) {
     const { stdout, exitCode, stderr } = await execa(shell, ["-lc", `sunbeam ${this.alias} ${commandName}`], {
-      input: JSON.stringify(input)
+      input: JSON.stringify({
+        ...input,
+        cwd: process.env.HOME
+      })
     })
 
     if (exitCode !== 0) {
@@ -137,36 +139,83 @@ function SunbeamExtension(props: { alias: string }) {
 }
 
 function SunbeamCommand({ extension, command }: { extension: Extension; command: sunbeam.CommandSpec }) {
+  const navigation = useNavigation();
   return <List.Item
     key={command.name}
     title={command.title}
     subtitle={extension.manifest.title}
     accessories={[{ text: extension.alias }]}
     actions={<ActionPanel>
-      <SunbeamAction action={{
-        title: "Run Command",
-        onAction: {
-          type: "run",
-          command: command.name,
-        }
-      }} extension={extension} />
-
+      <Action title="Run Command" onAction={() => runAction({ type: "run", command: command.name }, extension, navigation.push)} />
     </ActionPanel>}
   />
 
 }
 
+async function runAction(onAction: sunbeam.Command, extension: Extension, push: (jsx: JSX.Element) => void) {
+  switch (onAction.type) {
+    case "copy":
+      Clipboard.copy(onAction.text);
+      if (onAction.exit) {
+        await closeMainWindow();
+      }
+      return;
+    case "open":
+      open(onAction.target);
+      if (onAction.exit) {
+        await closeMainWindow();
+      }
+      return;
+    case "exit":
+      await closeMainWindow();
+      return;
+    case "run": {
+      const { command: name, params } = onAction
+
+      const target = extension.command(name);
+      if (!target) {
+        throw new Error("Command not found");
+      }
+      switch (target.mode) {
+        case "view": {
+          push(
+            <SunbeamPage extension={extension} commandName={name} params={params || {}} />
+          );
+          return;
+        }
+        case "no-view": {
+          const outputAction = await extension.run(name, { params: params || {} });
+          if (!outputAction) {
+            return;
+          }
+
+          await runAction(outputAction, extension, push);
+        }
+      }
+    }
+  }
+}
+
+
 
 function SunbeamPage(props: { extension: Extension, commandName: string; params: Record<string, string | number | boolean> }) {
   const [state, setState] = useState<{ page?: sunbeam.Page; isLoading: boolean }>({ isLoading: true });
 
-  useEffect(() => {
-    props.extension.run(props.commandName, { params: props.params }).then((page) => {
+  const navigation = useNavigation()
+
+  const reload = async (query?: string) => {
+    setState({ ...state, isLoading: true });
+    try {
+      const page = await props.extension.run(props.commandName, { params: props.params, query })
       setState({ page, isLoading: false });
-    }).catch((err) => {
+    } catch (err: any) {
       showToast(Toast.Style.Failure, "Failed to load page", err);
       setState({ isLoading: false });
-    })
+    }
+  }
+
+  useEffect(() => {
+    reload()
   }, []);
 
   if (!state.page) {
@@ -175,17 +224,17 @@ function SunbeamPage(props: { extension: Extension, commandName: string; params:
 
   switch (state.page.type) {
     case "list":
-      return <SunbeamList extension={props.extension} list={state.page} />;
+      return <SunbeamList isLoading={state.isLoading} list={state.page} onAction={(action) => runAction(action.onAction, props.extension, navigation.push)} reload={reload} />;
     case "detail":
-      return <SunbeamDetail extension={props.extension} detail={state.page} />;
+      return <SunbeamDetail detail={state.page} onAction={(action) => runAction(action.onAction, props.extension, navigation.push)} />;
   }
 }
 
-function SunbeamList(props: { extension: Extension; list: sunbeam.List }) {
+function SunbeamList(props: { isLoading: boolean, list: sunbeam.List, onAction: (action: sunbeam.Action) => void, reload: (query?: string) => void }) {
   return (
-    <List actions={
+    <List isLoading={props.isLoading} throttle onSearchTextChange={props.list.dynamic ? props.reload : undefined} actions={
       <ActionPanel>
-        {props.list.actions?.map((action, idx) => <SunbeamAction key={idx} action={action} extension={props.extension} />)}
+        {props.list.actions?.map((action, idx) => <Action key={idx} title={action.title} onAction={() => props.onAction(action)} />)}
       </ActionPanel>
     }>
       {props.list.emptyText && (
@@ -203,7 +252,7 @@ function SunbeamList(props: { extension: Extension; list: sunbeam.List }) {
             <ActionPanel>
               <ActionPanel.Section>
                 {item.actions?.map((action, idx) => (
-                  <SunbeamAction key={idx} action={action} extension={props.extension} />
+                  <Action key={idx} title={action.title} onAction={() => props.onAction(action)} />
                 ))}
               </ActionPanel.Section>
             </ActionPanel>
@@ -214,7 +263,7 @@ function SunbeamList(props: { extension: Extension; list: sunbeam.List }) {
   );
 }
 
-function SunbeamDetail(props: { extension: Extension; detail: sunbeam.Detail }) {
+function SunbeamDetail(props: { detail: sunbeam.Detail, onAction: (action: sunbeam.Action) => void }) {
   return (
     <Detail
       markdown={props.detail.markdown}
@@ -222,80 +271,11 @@ function SunbeamDetail(props: { extension: Extension; detail: sunbeam.Detail }) 
         <ActionPanel>
           <ActionPanel.Section>
             {props.detail.actions?.map((action, idx) => (
-              <SunbeamAction key={idx} action={action} extension={props.extension} />
+              <Action key={idx} title={action.title} onAction={() => props.onAction(action)} />
             ))}
           </ActionPanel.Section>
         </ActionPanel>
       }
-    />
-  );
-}
-
-function actionIcon(action: sunbeam.Action) {
-  switch (action.onAction.type) {
-    case "copy":
-      return Icon.Clipboard;
-    case "open":
-      return Icon.Globe;
-    case "run":
-      return Icon.Play;
-  }
-}
-
-function SunbeamAction({ action, extension }: { action: sunbeam.Action; extension: Extension }) {
-  const navigation = useNavigation();
-  async function runAction(action: sunbeam.Action) {
-    switch (action.onAction.type) {
-      case "copy":
-        Clipboard.copy(action.onAction.text);
-        if (action.onAction.exit) {
-          await closeMainWindow();
-        }
-        return;
-      case "open":
-        open(action.onAction.target);
-        if (action.onAction.exit) {
-          await closeMainWindow();
-        }
-        return;
-      case "run": {
-        const commandName = action.onAction.command;
-        const commandParams = action.onAction.params;
-        const command = extension.command(commandName);
-        if (!command) {
-          throw new Error(`Command not found: ${commandName}`);
-        }
-        switch (command.mode) {
-          case "view": {
-            navigation.push(
-              <SunbeamPage extension={extension} commandName={commandName} params={commandParams || {}} />
-            );
-            return;
-          }
-          case "no-view": {
-            const outputAction = await extension.run(commandName, { params: commandParams || {} });
-            if (!outputAction) {
-              throw new Error("Expected action");
-            }
-            if (outputAction.type === "list" || outputAction.type == "detail" || outputAction.type === "form") {
-              throw new Error("Expected action");
-            }
-
-            if (outputAction.type === "run") {
-              throw new Error("Nested run commands are not supported");
-            }
-            await runAction(outputAction);
-            return;
-          }
-        }
-      }
-    }
-  }
-  return (
-    <Action
-      title={action.title}
-      icon={actionIcon(action)}
-      onAction={() => runAction(action)}
     />
   );
 }
