@@ -147,7 +147,9 @@ function SunbeamCommand({ extension, command }: { extension: Extension; command:
     subtitle={extension.manifest.title}
     accessories={[{ text: extension.alias }]}
     actions={<ActionPanel>
-      <Action title="Run Command" onAction={() => runAction({ type: "run", command: command.name }, extension, navigation.push)} />
+      <Action title="Run Command" onAction={() => runAction({ type: "run", command: command.name }, extension, navigation.push).catch(err => {
+        showToast(Toast.Style.Failure, "Failed to run command", err);
+      })} />
     </ActionPanel>}
   />
 
@@ -183,6 +185,9 @@ async function runAction(onAction: sunbeam.Command, extension: Extension, push: 
             <SunbeamPage extension={extension} commandName={name} params={params || {}} />
           );
           return;
+        }
+        case "tty": {
+          throw new Error("TTY mode is not supported in Raycast");
         }
         case "no-view": {
           const outputAction = await extension.run(name, { params: params || {} });
@@ -223,17 +228,25 @@ function SunbeamPage(props: { extension: Extension, commandName: string; params:
     return <Detail isLoading={state.isLoading} />;
   }
 
+  const onAction = (action: sunbeam.Action) => {
+    try {
+      runAction(action.onAction, props.extension, navigation.push)
+    } catch (err: any) {
+      showToast(Toast.Style.Failure, "Failed to run action", err);
+    }
+  }
+
   switch (state.page.type) {
     case "list":
-      return <SunbeamList isLoading={state.isLoading} list={state.page} onAction={(action) => runAction(action.onAction, props.extension, navigation.push)} reload={reload} />;
+      return <SunbeamList isLoading={state.isLoading} list={state.page} onAction={onAction} reload={reload} />;
     case "detail":
-      return <SunbeamDetail detail={state.page} onAction={(action) => runAction(action.onAction, props.extension, navigation.push)} />;
+      return <SunbeamDetail detail={state.page} onAction={onAction} />;
   }
 }
 
 function SunbeamList(props: { isLoading: boolean, list: sunbeam.List, onAction: (action: sunbeam.Action) => void, reload: (query?: string) => void }) {
   return (
-    <List isLoading={props.isLoading} throttle onSearchTextChange={props.list.dynamic ? props.reload : undefined} actions={
+    <List isLoading={props.isLoading} throttle={props.list.dynamic} onSearchTextChange={props.list.dynamic ? props.reload : undefined} actions={
       <ActionPanel>
         {props.list.actions?.map((action, idx) => <Action key={idx} title={action.title} onAction={() => props.onAction(action)} />)}
       </ActionPanel>
