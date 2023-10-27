@@ -147,7 +147,7 @@ function SunbeamCommand({ extension, command }: { extension: Extension; command:
     subtitle={extension.manifest.title}
     accessories={[{ text: extension.alias }]}
     actions={<ActionPanel>
-      <Action title="Run Command" onAction={() => runAction({ type: "run", command: command.name }, extension, navigation.push).catch(err => {
+      <Action title="Run Command" onAction={() => runAction({ title: "Run", type: "run", command: command.name }, extension, navigation.push).catch(err => {
         showToast(Toast.Style.Failure, "Failed to run command", err);
       })} />
     </ActionPanel>}
@@ -155,17 +155,17 @@ function SunbeamCommand({ extension, command }: { extension: Extension; command:
 
 }
 
-async function runAction(onAction: sunbeam.Command, extension: Extension, push: (jsx: JSX.Element) => void) {
-  switch (onAction.type) {
+async function runAction(action: sunbeam.Action, extension: Extension, push: (jsx: JSX.Element) => void) {
+  switch (action.type) {
     case "copy":
-      Clipboard.copy(onAction.text);
-      if (onAction.exit) {
+      Clipboard.copy(action.text);
+      if (action.exit) {
         await closeMainWindow();
       }
       return;
     case "open":
-      open(onAction.target, onAction.app?.mac)
-      if (onAction.exit) {
+      open(action.target, action.app?.mac)
+      if (action.exit) {
         await closeMainWindow();
       }
       return;
@@ -173,23 +173,20 @@ async function runAction(onAction: sunbeam.Command, extension: Extension, push: 
       await closeMainWindow();
       return;
     case "run": {
-      const { command: name, params } = onAction
+      const { command: name, params } = action
 
       const target = extension.command(name);
       if (!target) {
         throw new Error("Command not found");
       }
       switch (target.mode) {
-        case "view": {
+        case "page": {
           push(
             <SunbeamPage extension={extension} commandName={name} params={params || {}} />
           );
           return;
         }
-        case "tty": {
-          throw new Error("TTY mode is not supported in Raycast");
-        }
-        case "no-view": {
+        case "silent": {
           const outputAction = await extension.run(name, { params: params || {} });
           if (!outputAction) {
             return;
@@ -230,7 +227,7 @@ function SunbeamPage(props: { extension: Extension, commandName: string; params:
 
   const onAction = (action: sunbeam.Action) => {
     try {
-      runAction(action.onAction, props.extension, navigation.push)
+      runAction(action, props.extension, navigation.push)
     } catch (err: any) {
       showToast(Toast.Style.Failure, "Failed to run action", err);
     }
