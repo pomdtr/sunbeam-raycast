@@ -5,6 +5,7 @@ import {
   closeMainWindow,
   getPreferenceValues,
   List,
+  Icon,
 } from "@raycast/api";
 import { useFetch, useFrecencySorting } from "@raycast/utils"
 import * as sunbeam from "@pomdtr/sunbeam"
@@ -46,7 +47,7 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
     case "open":
       return <Action.OpenInBrowser title={action.title} url={action.url} />
     case "reload":
-      return <Action title={action.title} onAction={reload ? () => reload(action.params || {}) : undefined} />
+      return <Action icon={Icon.ArrowClockwise} title={action.title} onAction={reload ? () => reload(action.params || {}) : undefined} />
     case "run":
       const command = extension.commands?.find((command) => command.name === action.command)
       if (!command) {
@@ -55,7 +56,7 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
 
       switch (command.mode) {
         case "silent":
-          return <Action title={action.title} onAction={async () => {
+          return <Action icon={Icon.Play} title={action.title} onAction={async () => {
             await fetch(new URL(`/extensions/${extension.name}/${command.name}`, preferences.url), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -66,9 +67,9 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
           }} />
         case "filter":
         case "search":
-          return <Action.Push title={action.title} target={<SunbeamList command={command} extension={extension} params={action.params} />} />
+          return <Action.Push icon={Icon.Play} title={action.title} target={<SunbeamList command={command} extension={extension} params={action.params} />} />
         case "detail":
-          return <Action.Push title={action.title} target={<SunbeamDetail command={command} extension={extension} params={action.params} />} />
+          return <Action.Push icon={Icon.Play} title={action.title} target={<SunbeamDetail command={command} extension={extension} params={action.params} />} />
       }
   }
 }
