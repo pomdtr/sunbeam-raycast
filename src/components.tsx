@@ -1,11 +1,11 @@
 import * as sunbeam from "@pomdtr/sunbeam"
-import { Action, ActionPanel, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List } from "@raycast/api";
 import { useFetch } from "@raycast/utils";
 import { useState, useEffect } from "react";
 
 const preferences = getPreferenceValues<Preferences>();
 
-function findMissingParams(command: sunbeam.Command, params: sunbeam.Params) {
+export function findMissingParams(command: sunbeam.Command, params: sunbeam.Params) {
   const missing: sunbeam.ParamDef[] = []
 
   for (const param of command.params || []) {
@@ -63,7 +63,7 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
   }
 }
 
-function SunbeamForm(props: {
+export function SunbeamForm(props: {
   extension: sunbeam.Extension
   command: sunbeam.Command
   params?: sunbeam.Params
@@ -76,20 +76,25 @@ function SunbeamForm(props: {
 
   return <Form actions={
     <ActionPanel>
-      <Action.SubmitForm onSubmit={async (values) => {
-        if (props.command.mode === "silent") {
-          await fetch(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(values),
-          })
+      <ActionPanel.Section>
+        <Action.SubmitForm onSubmit={async (values) => {
+          if (props.command.mode === "silent") {
+            await fetch(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(values),
+            })
 
-          await closeMainWindow()
-          return
-        }
+            await closeMainWindow()
+            return
+          }
 
-        setParams({ ...params, ...values })
-      }} title="Run" />
+          setParams({ ...params, ...values })
+        }} title="Run" />
+      </ActionPanel.Section>
+      <ActionPanel.Section>
+        <CreateQuickLinkAction name={props.command.description} extension={props.extension.name} command={props.command.name} params={params} />
+      </ActionPanel.Section>
     </ActionPanel>
   }>
     {missing.map((param, idx) => {
@@ -106,7 +111,7 @@ function SunbeamForm(props: {
   </Form>
 }
 
-function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Command; params?: sunbeam.Params }) {
+export function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Command; params?: sunbeam.Params }) {
   const [params, setParams] = useState<sunbeam.Params>(props.params || {})
   const [searchText, setSearchText] = useState<string>()
 
@@ -159,6 +164,9 @@ function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Com
               }} />
             ))}
           </ActionPanel.Section>
+          <ActionPanel.Section>
+            <CreateQuickLinkAction name={props.command.description} extension={props.extension.name} command={props.command.name} params={props.params} />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     />)}
@@ -178,7 +186,7 @@ function ListItemDetail({ detail }: { detail: sunbeam.ListItem["detail"] }) {
   return <Detail markdown={markdown} />
 }
 
-function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
+export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
   const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -203,8 +211,19 @@ function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Ext
               <SunbeamAction key={idx} action={action} extension={props.extension} onReload={() => mutate()} />
             ))}
           </ActionPanel.Section>
+          <ActionPanel.Section>
+            <CreateQuickLinkAction name={props.command.description} extension={props.extension.name} command={props.command.name} params={props.params} />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     />
   );
+}
+
+export function CreateQuickLinkAction({ name, extension, command, params }: { name?: string, extension: string, command: string, params?: sunbeam.Params }) {
+  let link = `raycast://extensions/pomdtr/sunbeam/run-command?arguments=${encodeURIComponent(JSON.stringify({ extension, command, }))}`
+  if (params) {
+    link += `&launchContext=${encodeURIComponent(JSON.stringify({ params }))}`
+  }
+  return <Action.CreateQuicklink title={"Create QuickLink"} quicklink={{ name, link, }} />
 }
