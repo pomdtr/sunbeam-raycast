@@ -1,6 +1,3 @@
-> [!Warning]
-> This repository is no longer maintained. I don't want sunbeam to strictly follow raycast UX, so I'm not going to maintain this extension and will focus on an [hyper](https://hyper.is) integration instead.
-
 # Raycast Integration for Sunbeam
 
 Use raycast as a [sunbeam](https://pomdtr.github.io/sunbeam) client.
@@ -17,3 +14,5 @@ Clone this repository, then run the following commands:
 npm install # Install dependencies
 npm run dev # Install extension
 ```
+
+This extension communicates with sunbeam via http. Make sure that a sunbeam server is running on your machine (`sunbeam serve`, default port is 8080).
