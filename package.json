@@ -33,7 +33,7 @@
     }
   ],
   "dependencies": {
-    "@pomdtr/sunbeam": "npm:@jsr/pomdtr__sunbeam@^0.0.10",
+    "@pomdtr/sunbeam": "npm:@jsr/pomdtr__sunbeam@^0.0.11",
     "@raycast/api": "^1.73.3",
     "@raycast/utils": "^1.18.1",
     "cross-fetch": "^4.1.0"

@@ -44,11 +44,11 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
     case "copy":
       return <Action.CopyToClipboard title={action.title} content={action.text} onCopy={onAction} />;
     case "open":
-      return <Action.OpenInBrowser title={action.title} url={action.target} />
+      return <Action.OpenInBrowser title={action.title} url={action.url} />
     case "reload":
       return <Action title={action.title} onAction={reload ? () => reload(action.params || {}) : undefined} />
     case "run":
-      const command = extension.commands.find((command) => command.name === action.command)
+      const command = extension.commands?.find((command) => command.name === action.command)
       if (!command) {
         return <Action title="Command not found" />
       }
