@@ -1,44 +1,27 @@
-import {
-  Action,
-  Detail,
-  ActionPanel,
-  closeMainWindow,
-  getPreferenceValues,
-  List,
-  Icon,
-} from "@raycast/api";
-import { useFetch, useFrecencySorting } from "@raycast/utils"
 import * as sunbeam from "@pomdtr/sunbeam"
-import { fetch } from "cross-fetch"
-import { useEffect, useState } from "react";
+import { Action, ActionPanel, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List, useNavigation } from "@raycast/api";
+import { useFetch } from "@raycast/utils";
+import { useState, useEffect } from "react";
 
 const preferences = getPreferenceValues<Preferences>();
 
-export default function () {
-  const { data, isLoading } = useFetch<sunbeam.Extension[]>(new URL("/extensions", preferences.url).href)
+function findMissingParams(command: sunbeam.Command, params: sunbeam.Params) {
+  const missing: sunbeam.ParamDef[] = []
 
-  const { data: items, visitItem } = useFrecencySorting(
-    data?.flatMap((extension) => (extension.root || []).map((action, idx) => ({ id: `${extension.name}:${idx}`, action, extension })))
-  )
+  for (const param of command.params || []) {
+    if (param.optional) {
+      continue
+    }
 
-  return (
-    <List isLoading={isLoading}>
-      {items?.map(item => (
-        <List.Item
-          key={item.id}
-          title={item.action.title}
-          subtitle={item.extension.title}
-          accessories={[{ text: item.extension.name }]}
-          actions={
-            <ActionPanel>
-              <SunbeamAction action={{ ...item.action, title: "Run", }} extension={item.extension} onAction={() => visitItem(item)} />
-            </ActionPanel>
-          }
-        />
-      ))}
-    </List>
-  );
-};
+    if (param.name in params) {
+      continue
+    }
+
+    missing.push(param)
+  }
+
+  return missing
+}
 
 export function SunbeamAction({ action, extension, onAction, onReload: reload }: { action: sunbeam.Action; extension: sunbeam.Extension, onAction?: () => void, onReload?: (params?: sunbeam.Params) => void }) {
   switch (action.type) {
@@ -53,6 +36,12 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
       if (!command) {
         return <Action title="Command not found" />
       }
+
+      const missing = findMissingParams(command, action.params || {})
+      if (missing.length > 0) {
+        return <Action.Push title={action.title} target={<SunbeamForm extension={extension} command={command} params={action.params} />} />
+      }
+
 
       switch (command.mode) {
         case "silent":
@@ -72,6 +61,49 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
           return <Action.Push icon={Icon.Play} title={action.title} target={<SunbeamDetail command={command} extension={extension} params={action.params} />} />
       }
   }
+}
+
+function SunbeamForm(props: {
+  extension: sunbeam.Extension
+  command: sunbeam.Command
+  params?: sunbeam.Params
+}) {
+  const [params, setParams] = useState<sunbeam.Params>(props.params || {})
+  const missing = findMissingParams(props.command, params)
+  if (missing.length === 0) {
+    return props.command.mode === "search" ? <SunbeamList command={props.command} extension={props.extension} params={params} /> : <SunbeamDetail command={props.command} extension={props.extension} params={params} />
+  }
+
+  return <Form actions={
+    <ActionPanel>
+      <Action.SubmitForm onSubmit={async (values) => {
+        if (props.command.mode === "silent") {
+          await fetch(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(values),
+          })
+
+          await closeMainWindow()
+          return
+        }
+
+        setParams({ ...params, ...values })
+      }} title="Run" />
+    </ActionPanel>
+  }>
+    {missing.map((param, idx) => {
+      switch (param.type) {
+        case "string":
+          return <Form.TextField key={param.name} id={param.name} title={param.name} placeholder={param.description} />
+        case "number":
+          return <Form.TextField key={param.name} id={param.name} title={param.name} placeholder={param.description} />
+        case "boolean":
+          return <Form.Checkbox key={param.name} id={param.name} title={param.name} label={param.description || ""} />
+      }
+
+    })}
+  </Form>
 }
 
 function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Command; params?: sunbeam.Params }) {

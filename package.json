@@ -18,14 +18,20 @@
   ],
   "commands": [
     {
-      "name": "search",
+      "name": "run-command",
       "title": "Search Commands",
       "description": "Search Sunbeam Commands",
       "mode": "view",
       "arguments": [
         {
-          "name": "alias",
-          "placeholder": "alias",
+          "name": "extension",
+          "placeholder": "extension",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "command",
+          "placeholder": "command",
           "type": "text",
           "required": false
         }
