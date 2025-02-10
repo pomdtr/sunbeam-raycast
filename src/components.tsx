@@ -46,7 +46,7 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
       switch (command.mode) {
         case "silent":
           return <Action icon={Icon.Play} title={action.title} onAction={async () => {
-            await fetch(new URL(`/extensions/${extension.name}/${command.name}`, preferences.url), {
+            await fetch(new URL(`/${extension.name}/${command.name}`, preferences.url), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(action.params || {}),
@@ -79,7 +79,7 @@ export function SunbeamForm(props: {
       <ActionPanel.Section>
         <Action.SubmitForm onSubmit={async (values) => {
           if (props.command.mode === "silent") {
-            await fetch(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+            await fetch(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(values),
@@ -115,7 +115,7 @@ export function SunbeamList(props: { extension: sunbeam.Extension; command: sunb
   const [params, setParams] = useState<sunbeam.Params>(props.params || {})
   const [searchText, setSearchText] = useState<string>()
 
-  const { data: list, isLoading, mutate } = useFetch<sunbeam.List>(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+  const { data: list, isLoading, mutate } = useFetch<sunbeam.List>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     keepPreviousData: true,
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -187,7 +187,7 @@ function ListItemDetail({ detail }: { detail: sunbeam.ListItem["detail"] }) {
 }
 
 export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
-  const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/extensions/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+  const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(props.params || {}),
