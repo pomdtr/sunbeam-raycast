@@ -10,7 +10,9 @@ export default function (props: LaunchProps<{
     params: sunbeam.Params
   }
 }>) {
-  const { data, isLoading } = useFetch<sunbeam.Extension[]>(new URL("/", preferences.url).href)
+  const { data, isLoading } = useFetch<sunbeam.Extension[]>(new URL("/", preferences.url).href, {
+    headers: preferences.token ? { Authorization: `Bearer ${preferences.token}` } : {},
+  })
 
   if (props.arguments.extension && props.arguments.command) {
     const extension = data?.find((extension) => extension.name === props.arguments.extension)

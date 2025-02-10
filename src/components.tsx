@@ -23,14 +23,12 @@ export function findMissingParams(command: sunbeam.Command, params: sunbeam.Para
   return missing
 }
 
-export function SunbeamAction({ action, extension, onAction, onReload: reload }: { action: sunbeam.Action; extension: sunbeam.Extension, onAction?: () => void, onReload?: (params?: sunbeam.Params) => void }) {
+export function SunbeamAction({ action, extension, onAction }: { action: sunbeam.Action; extension: sunbeam.Extension, onAction?: () => void }) {
   switch (action.type) {
     case "copy":
       return <Action.CopyToClipboard title={action.title} content={action.text} onCopy={onAction} />;
     case "open":
       return <Action.OpenInBrowser title={action.title} url={action.url} />
-    case "reload":
-      return <Action icon={Icon.ArrowClockwise} title={action.title} onAction={reload ? () => reload(action.params || {}) : undefined} />
     case "run":
       const command = extension.commands?.find((command) => command.name === action.command)
       if (!command) {
@@ -48,7 +46,13 @@ export function SunbeamAction({ action, extension, onAction, onReload: reload }:
           return <Action icon={Icon.Play} title={action.title} onAction={async () => {
             await fetch(new URL(`/${extension.name}/${command.name}`, preferences.url), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: preferences.token ? {
+                Authorization: `Bearer ${preferences.token}`,
+                "Content-Type": "application/json"
+              } :
+                {
+                  "Content-Type": "application/json",
+                },
               body: JSON.stringify(action.params || {}),
             })
 
@@ -81,7 +85,13 @@ export function SunbeamForm(props: {
           if (props.command.mode === "silent") {
             await fetch(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: preferences.token ? {
+                Authorization: `Bearer ${preferences.token}`,
+                "Content-Type": "application/json"
+              } :
+                {
+                  "Content-Type": "application/json",
+                },
               body: JSON.stringify(values),
             })
 
@@ -112,15 +122,20 @@ export function SunbeamForm(props: {
 }
 
 export function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Command; params?: sunbeam.Params }) {
-  const [params, setParams] = useState<sunbeam.Params>(props.params || {})
   const [searchText, setSearchText] = useState<string>()
 
   const { data: list, isLoading, mutate } = useFetch<sunbeam.List>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     keepPreviousData: true,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: preferences.token ? {
+      Authorization: `Bearer ${preferences.token}`,
+      "Content-Type": "application/json"
+    } :
+      {
+        "Content-Type": "application/json",
+      },
     body: JSON.stringify({
-      ...params,
+      ...props.params,
       query: searchText
     }),
   })
@@ -154,14 +169,7 @@ export function SunbeamList(props: { extension: sunbeam.Extension; command: sunb
         <ActionPanel>
           <ActionPanel.Section>
             {item.actions?.map((action, idx) => (
-              <SunbeamAction key={idx} action={action} extension={props.extension} onReload={(params) => {
-                if (params) {
-                  setParams(params)
-                  return
-                }
-
-                mutate()
-              }} />
+              <SunbeamAction key={idx} action={action} extension={props.extension} />
             ))}
           </ActionPanel.Section>
           <ActionPanel.Section>
@@ -187,9 +195,15 @@ function ListItemDetail({ detail }: { detail: sunbeam.ListItem["detail"] }) {
 }
 
 export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
-  const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+  const { data: detail, isLoading } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: preferences.token ? {
+      Authorization: `Bearer ${preferences.token}`,
+      "Content-Type": "application/json"
+    } :
+      {
+        "Content-Type": "application/json",
+      },
     body: JSON.stringify(props.params || {}),
   })
 
@@ -208,7 +222,7 @@ export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunb
         <ActionPanel>
           <ActionPanel.Section>
             {detail?.actions?.map((action, idx) => (
-              <SunbeamAction key={idx} action={action} extension={props.extension} onReload={() => mutate()} />
+              <SunbeamAction key={idx} action={action} extension={props.extension} />
             ))}
           </ActionPanel.Section>
           <ActionPanel.Section>
