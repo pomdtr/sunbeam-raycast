@@ -30,7 +30,7 @@ export default function (props: LaunchProps<{
     }
 
     if (command.mode === "silent") {
-      showFailureToast("Command interactive")
+      showFailureToast("Command is not interactive")
       return <List isLoading={isLoading} />
     }
 
@@ -44,7 +44,7 @@ export default function (props: LaunchProps<{
       }
 
       return extension.name === props.arguments.extension
-    }).flatMap((extension) => (extension.root || []).map((action, idx) => ({ id: `${extension.name}:${idx}`, action, extension })))
+    }).flatMap((extension) => (extension.actions || []).map((action, idx) => ({ id: `${extension.name}:${idx}`, action, extension })))
   )
 
   return (

@@ -1,6 +1,7 @@
 import * as sunbeam from "@pomdtr/sunbeam"
-import { Action, ActionPanel, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List } from "@raycast/api";
-import { useFetch } from "@raycast/utils";
+import { Action, ActionPanel, Clipboard, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List, open, useNavigation } from "@raycast/api";
+import { showFailureToast, useFetch } from "@raycast/utils";
+import { fetch } from "cross-fetch"
 import { useState, useEffect } from "react";
 
 const preferences = getPreferenceValues<Preferences>();
@@ -23,28 +24,28 @@ export function findMissingParams(command: sunbeam.Command, params: sunbeam.Para
   return missing
 }
 
-export function SunbeamAction({ action, extension, onAction }: { action: sunbeam.Action; extension: sunbeam.Extension, onAction?: () => void }) {
-  switch (action.type) {
+export function SunbeamAction(props: { action: sunbeam.Action; extension: sunbeam.Extension, onAction?: () => void }) {
+  switch (props.action.type) {
     case "copy":
-      return <Action.CopyToClipboard title={action.title} content={action.text} onCopy={onAction} />;
+      return <Action.CopyToClipboard title={props.action.title} content={props.action.text} onCopy={props.onAction} />;
     case "open":
-      return <Action.OpenInBrowser title={action.title} url={action.url} />
+      return <Action.OpenInBrowser title={props.action.title} url={props.action.target} onOpen={props.onAction} />
     case "run":
-      const command = extension.commands?.find((command) => command.name === action.command)
+      const action = props.action
+      const command = props.extension.commands?.find((command) => command.name === action.command)
       if (!command) {
         return <Action title="Command not found" />
       }
 
-      const missing = findMissingParams(command, action.params || {})
+      const missing = findMissingParams(command, props.action.params || {})
       if (missing.length > 0) {
-        return <Action.Push title={action.title} target={<SunbeamForm extension={extension} command={command} params={action.params} />} />
+        return <Action.Push title={props.action.title} target={<SunbeamForm extension={props.extension} command={command} params={props.action.params} />} />
       }
 
-
       switch (command.mode) {
-        case "silent":
-          return <Action icon={Icon.Play} title={action.title} onAction={async () => {
-            await fetch(new URL(`/${extension.name}/${command.name}`, preferences.url), {
+        case "silent": {
+          return <Action icon={Icon.Play} title={props.action.title} onAction={async () => {
+            const resp = await fetch(new URL(`/${props.extension.name}/${command.name}`, preferences.url), {
               method: "POST",
               headers: preferences.token ? {
                 Authorization: `Bearer ${preferences.token}`,
@@ -56,13 +57,45 @@ export function SunbeamAction({ action, extension, onAction }: { action: sunbeam
               body: JSON.stringify(action.params || {}),
             })
 
+            if (!resp.ok) {
+              await showFailureToast("Failed to run command")
+              return
+            }
+
             await closeMainWindow()
           }} />
-        case "filter":
-        case "search":
-          return <Action.Push icon={Icon.Play} title={action.title} target={<SunbeamList command={command} extension={extension} params={action.params} />} />
-        case "detail":
-          return <Action.Push icon={Icon.Play} title={action.title} target={<SunbeamDetail command={command} extension={extension} params={action.params} />} />
+        }
+        case "action": {
+          return <Action icon={Icon.Play} title={props.action.title} onAction={async () => {
+            const resp = await fetch(new URL(`/${props.extension.name}/${command.name}`, preferences.url), {
+              method: "POST",
+              headers: preferences.token ? {
+                Authorization: `Bearer ${preferences.token}`,
+                "Content-Type": "application/json"
+              } :
+                {
+                  "Content-Type": "application/json",
+                },
+              body: JSON.stringify(action.params || {}),
+            })
+
+            const next: sunbeam.Action = await resp.json()
+            if (next.type === "copy") {
+              await Clipboard.copy(next.text)
+              await closeMainWindow()
+              return
+            } else if (next.type === "open") {
+              await open(next.target)
+              await closeMainWindow()
+              return
+            } else if (next.type === "run") {
+              throw new Error("Cannot chain run actions")
+            }
+          }
+          } />
+        }
+        default:
+          return <Action.Push icon={Icon.Play} title={props.action.title} target={<SunbeamForm command={command} extension={props.extension} params={props.action.params} />} />
       }
   }
 }
@@ -75,7 +108,7 @@ export function SunbeamForm(props: {
   const [params, setParams] = useState<sunbeam.Params>(props.params || {})
   const missing = findMissingParams(props.command, params)
   if (missing.length === 0) {
-    return props.command.mode === "search" ? <SunbeamList command={props.command} extension={props.extension} params={params} /> : <SunbeamDetail command={props.command} extension={props.extension} params={params} />
+    return props.command.mode === "detail" ? <SunbeamDetail command={props.command} extension={props.extension} params={params} /> : <SunbeamList command={props.command} extension={props.extension} params={params} />
   }
 
   return <Form actions={
@@ -97,6 +130,36 @@ export function SunbeamForm(props: {
 
             await closeMainWindow()
             return
+          } else if (props.command.mode === "action") {
+            const resp = await fetch(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+              method: "POST",
+              headers: preferences.token ? {
+                Authorization: `Bearer ${preferences.token}`,
+                "Content-Type": "application/json"
+              } :
+                {
+                  "Content-Type": "application/json",
+                },
+              body: JSON.stringify(values),
+            })
+
+            if (!resp.ok) {
+              await showFailureToast("Failed to run command")
+              return
+            }
+
+            const action: sunbeam.Action = await resp.json()
+            if (action.type == "copy") {
+              await Clipboard.copy(action.text)
+              await closeMainWindow()
+              return
+            } else if (action.type == "open") {
+              await open(action.target)
+              await closeMainWindow()
+              return
+            } else if (action.type == "run") {
+              throw new Error("Cannot chain run actions")
+            }
           }
 
           setParams({ ...params, ...values })
@@ -107,7 +170,7 @@ export function SunbeamForm(props: {
       </ActionPanel.Section>
     </ActionPanel>
   }>
-    {missing.map((param, idx) => {
+    {missing.map((param) => {
       switch (param.type) {
         case "string":
           return <Form.TextField key={param.name} id={param.name} title={param.name} placeholder={param.description} />
@@ -116,7 +179,6 @@ export function SunbeamForm(props: {
         case "boolean":
           return <Form.Checkbox key={param.name} id={param.name} title={param.name} label={param.description || ""} />
       }
-
     })}
   </Form>
 }
@@ -154,7 +216,7 @@ export function SunbeamList(props: { extension: sunbeam.Extension; command: sunb
 
   return <List
     isLoading={isLoading}
-    throttle
+    throttle={props.command.mode === "search"}
     isShowingDetail={list?.showDetail}
     onSearchTextChange={props.command.mode === "search" ? setSearchText : undefined}
   >
@@ -195,7 +257,7 @@ function ListItemDetail({ detail }: { detail: sunbeam.ListItem["detail"] }) {
 }
 
 export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
-  const { data: detail, isLoading } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
+  const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
     method: "POST",
     headers: preferences.token ? {
       Authorization: `Bearer ${preferences.token}`,
