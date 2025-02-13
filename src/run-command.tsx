@@ -1,5 +1,5 @@
 import { ActionPanel, getPreferenceValues, LaunchProps, List } from "@raycast/api";
-import { showFailureToast, useFetch, useFrecencySorting } from "@raycast/utils"
+import { showFailureToast, useExec, useFrecencySorting } from "@raycast/utils"
 import * as sunbeam from "@pomdtr/sunbeam"
 import { findMissingParams, SunbeamAction, SunbeamDetail, SunbeamForm, SunbeamList } from "./components.tsx";
 
@@ -10,9 +10,24 @@ export default function (props: LaunchProps<{
     params: sunbeam.Params
   }
 }>) {
-  const { data, isLoading } = useFetch<sunbeam.Extension[]>(new URL("/", preferences.url).href, {
-    headers: preferences.token ? { Authorization: `Bearer ${preferences.token}` } : {},
+  const { data, isLoading } = useExec("sunbeam", {
+    env: {
+      PATH: preferences.PATH,
+    },
+    parseOutput: (output) => {
+      if (output.exitCode === null) {
+        return
+      }
+
+      if (output.exitCode !== 0) {
+        showFailureToast(output.stderr)
+        return
+      }
+
+      return JSON.parse(output.stdout) as sunbeam.Extension[]
+    },
   })
+
 
   if (props.arguments.extension && props.arguments.command) {
     const extension = data?.find((extension) => extension.name === props.arguments.extension)
@@ -53,6 +68,7 @@ export default function (props: LaunchProps<{
         <List.Item
           key={item.id}
           title={item.action.title}
+          keywords={[item.extension.title, item.extension.name]}
           subtitle={item.extension.title}
           accessories={[{ text: item.extension.name }]}
           actions={

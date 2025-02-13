@@ -9,17 +9,11 @@
   "license": "MIT",
   "preferences": [
     {
-      "name": "url",
-      "title": "Sunbeam URL",
-      "description": "Sunbeam URL",
+      "name": "PATH",
+      "title": "PATH env variable",
+      "default": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
       "type": "textfield",
-      "required": true
-    },
-    {
-      "name": "token",
-      "title": "Token",
-      "description": "Sunbeam Connection Token",
-      "type": "password",
+      "description": "The PATH env variable",
       "required": false
     }
   ],
@@ -49,7 +43,7 @@
     "@pomdtr/sunbeam": "npm:@jsr/pomdtr__sunbeam@^0.0.15",
     "@raycast/api": "^1.73.3",
     "@raycast/utils": "^1.18.1",
-    "cross-fetch": "^4.1.0"
+    "execa": "^9.5.2"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.6",

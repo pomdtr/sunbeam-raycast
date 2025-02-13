@@ -1,7 +1,7 @@
 import * as sunbeam from "@pomdtr/sunbeam"
 import { Action, ActionPanel, Clipboard, closeMainWindow, Detail, Form, getPreferenceValues, Icon, List, open, useNavigation } from "@raycast/api";
-import { showFailureToast, useFetch } from "@raycast/utils";
-import { fetch } from "cross-fetch"
+import { showFailureToast, useExec } from "@raycast/utils";
+import { execa } from "execa";
 import { useState, useEffect } from "react";
 
 const preferences = getPreferenceValues<Preferences>();
@@ -45,20 +45,17 @@ export function SunbeamAction(props: { action: sunbeam.Action; extension: sunbea
       switch (command.mode) {
         case "silent": {
           return <Action icon={Icon.Play} title={props.action.title} onAction={async () => {
-            const resp = await fetch(new URL(`/${props.extension.name}/${command.name}`, preferences.url), {
-              method: "POST",
-              headers: preferences.token ? {
-                Authorization: `Bearer ${preferences.token}`,
-                "Content-Type": "application/json"
-              } :
-                {
-                  "Content-Type": "application/json",
-                },
-              body: JSON.stringify(action.params || {}),
+            console.log("Running command", command.name, action.params)
+            const res = await execa("sunbeam", ["run", props.extension.name, command.name], {
+              input: JSON.stringify(action.params || {}),
+              env: {
+                ...process.env,
+                PATH: preferences.PATH,
+              }
             })
 
-            if (!resp.ok) {
-              await showFailureToast("Failed to run command")
+            if (res.exitCode != 0) {
+              await showFailureToast("Failed to run command: " + res.stderr)
               return
             }
 
@@ -67,28 +64,29 @@ export function SunbeamAction(props: { action: sunbeam.Action; extension: sunbea
         }
         case "action": {
           return <Action icon={Icon.Play} title={props.action.title} onAction={async () => {
-            const resp = await fetch(new URL(`/${props.extension.name}/${command.name}`, preferences.url), {
-              method: "POST",
-              headers: preferences.token ? {
-                Authorization: `Bearer ${preferences.token}`,
-                "Content-Type": "application/json"
-              } :
-                {
-                  "Content-Type": "application/json",
-                },
-              body: JSON.stringify(action.params || {}),
+            const res = await execa("sunbeam", ["run", props.extension.name, command.name], {
+              input: JSON.stringify(action.params || {}),
+              env: {
+                ...process.env,
+                PATH: preferences.PATH,
+              }
             })
 
-            const next: sunbeam.Action = await resp.json()
-            if (next.type === "copy") {
-              await Clipboard.copy(next.text)
+            if (res.exitCode != 0) {
+              await showFailureToast("Failed to run command: " + JSON.stringify(res))
+              return
+            }
+
+            const nextAction = JSON.parse(res.stdout) as sunbeam.Action
+            if (nextAction.type === "copy") {
+              await Clipboard.copy(nextAction.text)
               await closeMainWindow()
               return
-            } else if (next.type === "open") {
-              await open(next.target)
+            } else if (nextAction.type === "open") {
+              await open(nextAction.target)
               await closeMainWindow()
               return
-            } else if (next.type === "run") {
+            } else if (nextAction.type === "run") {
               throw new Error("Cannot chain run actions")
             }
           }
@@ -111,44 +109,43 @@ export function SunbeamForm(props: {
     return props.command.mode === "detail" ? <SunbeamDetail command={props.command} extension={props.extension} params={params} /> : <SunbeamList command={props.command} extension={props.extension} params={params} />
   }
 
-  return <Form actions={
+  return <Form navigationTitle={props.extension.title} actions={
     <ActionPanel>
       <ActionPanel.Section>
         <Action.SubmitForm onSubmit={async (values) => {
           if (props.command.mode === "silent") {
-            await fetch(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
-              method: "POST",
-              headers: preferences.token ? {
-                Authorization: `Bearer ${preferences.token}`,
-                "Content-Type": "application/json"
-              } :
-                {
-                  "Content-Type": "application/json",
-                },
-              body: JSON.stringify(values),
+            const res = await execa("sunbeam", ["run", props.extension.name, props.command.name], {
+              input: JSON.stringify(values || {}),
+              env: {
+                ...process.env,
+                PATH: preferences.PATH,
+              }
             })
 
-            await closeMainWindow()
-            return
-          } else if (props.command.mode === "action") {
-            const resp = await fetch(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
-              method: "POST",
-              headers: preferences.token ? {
-                Authorization: `Bearer ${preferences.token}`,
-                "Content-Type": "application/json"
-              } :
-                {
-                  "Content-Type": "application/json",
-                },
-              body: JSON.stringify(values),
-            })
-
-            if (!resp.ok) {
+            if (res.exitCode != 0) {
               await showFailureToast("Failed to run command")
               return
             }
 
-            const action: sunbeam.Action = await resp.json()
+            await closeMainWindow()
+            return
+          } else if (props.command.mode === "action") {
+            const res = await execa("sunbeam", ["run", props.extension.name, props.command.name], {
+              input: JSON.stringify(values || {}),
+              env: {
+                ...process.env,
+                PATH: preferences.PATH,
+              }
+            })
+
+
+            if (res.exitCode != 0) {
+              await showFailureToast("Failed to run command")
+              return
+            }
+
+
+            const action: sunbeam.Action = JSON.parse(res.stdout)
             if (action.type == "copy") {
               await Clipboard.copy(action.text)
               await closeMainWindow()
@@ -186,21 +183,29 @@ export function SunbeamForm(props: {
 export function SunbeamList(props: { extension: sunbeam.Extension; command: sunbeam.Command; params?: sunbeam.Params }) {
   const [searchText, setSearchText] = useState<string>()
 
-  const { data: list, isLoading, mutate } = useFetch<sunbeam.List>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
-    keepPreviousData: true,
-    method: "POST",
-    headers: preferences.token ? {
-      Authorization: `Bearer ${preferences.token}`,
-      "Content-Type": "application/json"
-    } :
-      {
-        "Content-Type": "application/json",
-      },
-    body: JSON.stringify({
+  const { data: list, isLoading, mutate } = useExec("sunbeam", ["run", props.extension.name, props.command.name], {
+    input: JSON.stringify({
       ...props.params,
-      query: searchText
+      query: searchText,
     }),
+    env: {
+      ...process.env,
+      PATH: preferences.PATH,
+    },
+    parseOutput: (output) => {
+      if (output.exitCode === null) {
+        return
+      }
+
+      if (output.exitCode !== 0) {
+        showFailureToast(output.stderr)
+        return
+      }
+
+      return JSON.parse(output.stdout) as sunbeam.List
+    }
   })
+
 
   useEffect(() => {
     if (!list?.autoRefreshSeconds) {
@@ -215,6 +220,7 @@ export function SunbeamList(props: { extension: sunbeam.Extension; command: sunb
   }, [])
 
   return <List
+    navigationTitle={props.extension.title}
     isLoading={isLoading}
     throttle={props.command.mode === "search"}
     isShowingDetail={list?.showDetail}
@@ -257,16 +263,25 @@ function ListItemDetail({ detail }: { detail: sunbeam.ListItem["detail"] }) {
 }
 
 export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunbeam.Extension, params?: sunbeam.Params }) {
-  const { data: detail, isLoading, mutate } = useFetch<sunbeam.Detail>(new URL(`/${props.extension.name}/${props.command.name}`, preferences.url).href, {
-    method: "POST",
-    headers: preferences.token ? {
-      Authorization: `Bearer ${preferences.token}`,
-      "Content-Type": "application/json"
-    } :
-      {
-        "Content-Type": "application/json",
-      },
-    body: JSON.stringify(props.params || {}),
+  const { data: detail, isLoading } = useExec("sunbeam", ["run", props.extension.name, props.command.name], {
+    input: JSON.stringify({
+      ...props.params,
+    }),
+    env: {
+      PATH: preferences.PATH,
+    },
+    parseOutput: (res) => {
+      if (res.exitCode === null) {
+        return
+      }
+
+      if (res.exitCode !== 0) {
+        showFailureToast(res.stderr)
+        return
+      }
+
+      return JSON.parse(res.stdout) as sunbeam.Detail
+    }
   })
 
   let markdown: string | undefined;
@@ -278,6 +293,7 @@ export function SunbeamDetail(props: { command: sunbeam.Command, extension: sunb
 
   return (
     <Detail
+      navigationTitle={props.extension.title}
       isLoading={isLoading}
       markdown={markdown}
       actions={
